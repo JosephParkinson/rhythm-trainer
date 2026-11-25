@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Rhythm Trainer</title>
+    <link rel="icon" href="data:," />
+  </head>
+  <body>
+    <div class="rack">
+      <div class="top">
+        <div class="brand">RHYTHM<span>TRAINER</span></div>
+        <div class="lcd"><div id="lcd1"></div><div id="lcd2"></div></div>
+      </div>
+
+      <div class="panel controls">
+        <label>BPM <input id="bpm" type="number" /></label>
+        <label>COUNT-IN <input id="countIn" type="number" /></label>
+        <label>BARS <input id="bars" type="number" /></label>
+        <label title="Subtracted from every hit">LATENCY <input id="latency" type="number" /> MS</label>
+        <label class="check"><input id="metronome" type="checkbox" /> METRONOME</label>
+        <label class="check"><input id="sounds" type="checkbox" /> SOUNDS</label>
+        <span id="midi" class="midiled">MIDI</span>
+      </div>
+
+      <div class="panel transport">
+        <button id="play" class="btn play">PLAY</button>
+        <button id="preview" class="btn">PREVIEW</button>
+        <button id="clear" class="btn">CLEAR</button>
+        <button id="cal" class="btn">CALIBRATE</button>
+        <span class="nav">
+          <button id="replay" class="btn">REPLAY</button>
+          <button id="prev" class="btn small" title="Previous bar">&#9668;</button>
+          <button id="next" class="btn small" title="Next bar">&#9658;</button>
+        </span>
+      </div>
+
+      <div class="panel gridwrap">
+        <div id="grid" class="grid"></div>
+        <div class="legend">
+          <span><i class="mk good"></i>&le;20MS</span>
+          <span><i class="mk ok"></i>&le;45MS</span>
+          <span><i class="mk bad"></i>&gt;45MS</span>
+          <span><i class="mk extra"></i>EXTRA</span>
+          <span><i class="missbox"></i>MISSED</span>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
