@@ -1,5 +1,5 @@
 import { scoreCell, type Take } from '../scoring';
-import { STEPS, STEPS_PER_BEAT, TRACKS, patternBars, patternSteps, type Pattern } from '../settings';
+import { MAX_PATTERN_BARS, STEPS, STEPS_PER_BEAT, TRACKS, patternBars, patternSteps, type Pattern } from '../settings';
 import { el } from './dom';
 import { fmtMs } from './format';
 
@@ -8,8 +8,10 @@ export interface GridEvents {
   toggle(track: number, step: number): void;
   bindClick(track: number): void;
   muteClick(track: number): void;
-  /** a page button was clicked */
+  /** a bar square inside the pattern was clicked: view that bar */
   pageClick(page: number): void;
+  /** a dark square was clicked (extend) or a lit one right-clicked (shorten): new length in bars */
+  lengthClick(bars: number): void;
   /** the page shown changed (by click or by following playback) */
   pageChanged(page: number): void;
 }
@@ -20,7 +22,8 @@ const FLASH_MS = 90;
 /**
  * The step grid shows one bar (page) of the pattern at a time: step LEDs, track
  * rows (label light = mute toggle, binding button), cells with hit markers.
- * Page buttons above it pick the bar; they're hidden for one-bar patterns.
+ * Four bar squares above it show the pattern's length (amber) and the bar on
+ * screen (bright), mark the bar PLAY is on (red dot), and set the length.
  */
 export class Grid {
   private readonly leds: HTMLElement[] = [];
@@ -28,7 +31,9 @@ export class Grid {
   private readonly labels: HTMLButtonElement[] = [];
   private readonly binds: HTMLButtonElement[] = [];
   private readonly flashTimers: number[] = [];
-  private pageButtons: HTMLButtonElement[] = [];
+  private readonly squares: HTMLButtonElement[] = [];
+  private playingPage = -1;
+  private lengthLocked = false;
   private muted: readonly boolean[] = [];
   private pattern: Pattern = [];
   private page = 0;
@@ -36,9 +41,19 @@ export class Grid {
 
   constructor(
     root: HTMLElement,
-    private readonly pagesRoot: HTMLElement,
+    pagesRoot: HTMLElement,
     private readonly ev: GridEvents,
   ) {
+    for (let p = 0; p < MAX_PATTERN_BARS; p++) {
+      const sq = el('button', 'barsq', pagesRoot);
+      sq.addEventListener('click', () => this.squareClick(p, false));
+      sq.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        this.squareClick(p, true);
+      });
+      this.squares.push(sq);
+    }
+
     el('div', '', root);
     for (let s = 0; s < STEPS; s++) this.leds.push(el('div', 'stepled', root));
 
@@ -79,9 +94,21 @@ export class Grid {
   setPattern(p: Pattern) {
     this.pattern = p;
     const bars = patternBars(p);
-    if (this.pageButtons.length !== bars) this.buildPages(bars);
     if (this.page >= bars) this.setPage(bars - 1);
     else this.renderPage();
+  }
+
+  /** The bar PLAY is on (-1: none). Marks its square; the step lights only run while it's the bar on screen. */
+  setPlayingPage(page: number) {
+    if (page === this.playingPage) return;
+    this.playingPage = page;
+    this.renderSquares();
+  }
+
+  /** Lengths can only change while idle with the editor pattern loaded. */
+  setLengthLocked(locked: boolean) {
+    this.lengthLocked = locked;
+    this.renderSquares();
   }
 
   setPage(page: number) {
@@ -164,21 +191,31 @@ export class Grid {
     this.labels.forEach((b) => (b.disabled = locked));
   }
 
-  private buildPages(bars: number) {
-    this.pagesRoot.replaceChildren();
-    this.pagesRoot.hidden = bars < 2;
-    this.pageButtons = Array.from({ length: bars }, (_, p) => {
-      const b = el('button', 'pagebtn', this.pagesRoot);
-      b.textContent = String(p + 1);
-      b.title = `Bar ${p + 1}`;
-      b.addEventListener('click', () => this.ev.pageClick(p));
-      return b;
-    });
+  private squareClick(p: number, shorten: boolean) {
+    const bars = patternBars(this.pattern);
+    if (shorten) {
+      if (p + 1 < bars && !this.lengthLocked) this.ev.lengthClick(p + 1);
+    } else if (p < bars) this.ev.pageClick(p);
+    else if (!this.lengthLocked) this.ev.lengthClick(p + 1);
   }
 
   private renderPage() {
     const base = this.page * STEPS;
     this.cells.forEach((row, t) => row.forEach((c, s) => c.classList.toggle('on', !!this.pattern[t]?.[base + s])));
-    this.pageButtons.forEach((b, p) => b.classList.toggle('on', p === this.page));
+    this.renderSquares();
+  }
+
+  private renderSquares() {
+    const bars = patternBars(this.pattern);
+    this.squares.forEach((sq, p) => {
+      const inside = p < bars;
+      sq.classList.toggle('in', inside);
+      sq.classList.toggle('cur', p === this.page);
+      sq.classList.toggle('playing', p === this.playingPage);
+      sq.disabled = !inside && this.lengthLocked;
+      sq.title = inside
+        ? `Bar ${p + 1}` + (p + 1 < bars && !this.lengthLocked ? `. Right-click to shorten to ${p + 1} bar${p ? 's' : ''}` : '')
+        : `Click to extend to ${p + 1} bars`;
+    });
   }
 }

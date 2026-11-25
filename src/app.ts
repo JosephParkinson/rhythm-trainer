@@ -11,6 +11,7 @@ import { ReplaySession } from './sessions/replay';
 import { RunSession } from './sessions/run';
 import type { Deps, Session } from './sessions/session';
 import {
+  STEPS,
   TRACKS,
   browserStore,
   clampSetting,
@@ -76,6 +77,7 @@ export class App {
       bindClick: (t) => this.bindings.learn(this.bindings.learning === t ? null : t),
       muteClick: (t) => this.toggleMute(t),
       pageClick: (p) => this.pageClick(p),
+      lengthClick: (bars) => void this.setLength(bars),
       pageChanged: (p) => this.roll.setPage(p),
     });
     this.roll = new PianoRoll($('roll'), {
@@ -84,8 +86,6 @@ export class App {
     });
     this.controls = new Controls(this.settings, {
       toggle: (m) => (this.session?.mode === m ? this.end(this.session, false) : void this.start(m)),
-      nav: (d) => this.showReview(this.reviewBar + d),
-      length: (bars) => this.setLength(bars),
       change: () => {
         this.save();
         // A new buffer size needs a new AudioContext; it's created on next use.
@@ -105,6 +105,7 @@ export class App {
       },
       (e) => this.pianoNote(e),
       () => this.playPause(),
+      (d) => !this.session && this.result && this.showReview(this.reviewBar + d),
     );
     const startMidi = () => this.bindings.startMidi((names) => this.controls.setMidi(names));
     startMidi();
@@ -402,16 +403,29 @@ export class App {
     this.renderSource();
   }
 
-  /** LENGTH: grows by repeating the existing bars, shrinks by dropping the end. */
-  private setLength(bars: number) {
+  /**
+   * Bar squares: growing repeats the existing bars, shrinking drops the end
+   * (after a confirm if anything would be lost). Shows the bar that was clicked.
+   */
+  private async setLength(bars: number) {
     const from = patternBars(this.settings.pattern);
-    if (this.mode !== 'idle' || this.routineId || bars === from) return this.controls.setLength(from);
+    if (this.mode !== 'idle' || this.routineId || bars === from) return;
+    if (bars < from && this.hasContentFrom(bars * STEPS)) {
+      const which = bars + 1 === from ? `BAR ${from}` : `BARS ${bars + 1}-${from}`;
+      if (!(await confirmBox(`SHORTEN TO ${bars} BAR${bars > 1 ? 'S' : ''}? ${which} WILL BE DELETED.`, 'SHORTEN'))) return;
+    }
     this.settings.pattern = resizePattern(this.settings.pattern, bars);
     this.settings.piano = resizePiano(this.settings.piano, from, bars);
     this.playFrom = 0;
     this.save();
     this.setResult(null); // the review no longer matches the pattern
     this.showIdle();
+    this.grid.setPage(bars - 1);
+  }
+
+  /** Any drum step or keyboard note at or after `step`. */
+  private hasContentFrom(step: number) {
+    return this.settings.pattern.some((r) => r.slice(step).some(Boolean)) || this.settings.piano.some((n) => n.step >= step);
   }
 
   private pageClick(page: number) {
@@ -537,14 +551,9 @@ export class App {
 
   private refresh() {
     const busy = this.mode !== 'idle';
-    this.controls.update({
-      mode: this.mode,
-      bars: this.result ? barRefs(this.result).length : 0,
-      reviewBar: this.reviewBar,
-      routine: !!this.routineId,
-    });
-    this.controls.setLength(patternBars(this.settings.pattern));
+    this.controls.update({ mode: this.mode, routine: !!this.routineId });
     this.grid.setLocked(busy);
+    this.grid.setLengthLocked(busy || !!this.routineId);
     this.grid.setMuteLocked(busy && this.mode !== 'play');
     this.roll.setLocked(!this.editable);
     $<HTMLButtonElement>('pianoClear').disabled = !this.editable;

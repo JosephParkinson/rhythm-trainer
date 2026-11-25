@@ -23,6 +23,8 @@ export class Bindings {
     private readonly onPiano: PianoHandler,
     /** space bar, when it isn't bound to a drum: play/pause */
     private readonly onSpace: () => void,
+    /** ← / → : step through review bars */
+    private readonly onNav: (delta: number) => void,
   ) {
     window.addEventListener('keydown', (e) => this.onKey(e));
     // Clicking anywhere except a binding button cancels learn.
@@ -67,6 +69,10 @@ export class Bindings {
     if (key === ' ' && !this.settings.keys.includes(' ')) {
       e.preventDefault();
       return this.onSpace();
+    }
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      e.preventDefault();
+      return this.onNav(e.key === 'ArrowLeft' ? -1 : 1);
     }
     const track = this.settings.keys.indexOf(key);
     if (track < 0) return;

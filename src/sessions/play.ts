@@ -6,7 +6,8 @@ import type { Deps, Session } from './session';
 /**
  * PLAY: loops a pattern until paused, starting from `fromStep` (to resume).
  * The pattern, keyboard part and mutes are read live, so edits are heard on the
- * next pass. The grid follows the playhead across the pattern's pages.
+ * next pass. The grid stays on the bar you're looking at: the playing bar's
+ * square is marked, and the step lights only run while it's the bar on screen.
  */
 export class PlaySession implements Session {
   readonly mode = 'play';
@@ -45,11 +46,13 @@ export class PlaySession implements Session {
     const pos = this.sched.position();
     if (pos < 0) return;
     const s = Math.floor(pos) % this.len;
-    this.d.grid.setPage(Math.floor(s / STEPS));
-    this.d.grid.setPlayhead(s % STEPS);
+    const page = Math.floor(s / STEPS);
+    this.d.grid.setPlayingPage(page);
+    this.d.grid.setPlayhead(page === this.d.grid.currentPage ? s % STEPS : -1);
   }
 
   stop() {
+    this.d.grid.setPlayingPage(-1);
     this.sched.stop();
     this.d.eng.cancelScheduled();
   }

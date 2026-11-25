@@ -207,12 +207,6 @@ input:disabled,
   box-shadow: 0 0 6px #ff3b2e;
 }
 
-.nav {
-  display: flex;
-  gap: 4px;
-  margin-left: auto;
-}
-
 .btn.small {
   padding: 5px 9px;
 }
@@ -968,43 +962,48 @@ table.data tr.locked {
   content: '\00a0';
 }
 
-/* ---------- bar pages ---------- */
+/* ---------- bar squares: length (amber), bar on screen (bright), PLAY's bar (red dot) ---------- */
 
 .pages {
   display: flex;
-  gap: 4px;
-  margin: 0 0 6px 144px;
+  gap: 5px;
+  margin: 0 0 7px 144px;
 }
 
-.pagebtn {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 2px 8px 2px 4px;
-  background: linear-gradient(#5e6269, #3b3e43);
-  color: var(--text);
-  border: 2px solid;
-  border-color: #7a7f87 var(--lo) var(--lo) #7a7f87;
-  font: bold 11px Tahoma, Verdana, sans-serif;
+.barsq {
+  position: relative;
+  width: 28px;
+  height: 14px;
+  padding: 0;
+  background: #2b2217;
+  border: 1px solid #000;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
   cursor: pointer;
 }
 
-.pagebtn::before {
-  content: '';
-  width: 6px;
-  height: 6px;
-  background: var(--led-off);
-  border: 1px solid #000;
+.barsq.in {
+  background: #7a5414;
 }
 
-.pagebtn.on {
-  background: linear-gradient(#36393d, #4a4d53);
-  border-color: var(--lo) #7a7f87 #7a7f87 var(--lo);
-}
-
-.pagebtn.on::before {
+.barsq.cur {
   background: var(--led);
-  box-shadow: 0 0 5px var(--led);
+  box-shadow: 0 0 6px var(--led);
+}
+
+.barsq.playing::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #ff3b2e;
+  box-shadow: 0 0 4px #ff3b2e;
+}
+
+.barsq:disabled {
+  cursor: default;
 }
 
 /* ---------- KEYS label (mute light) ---------- */
