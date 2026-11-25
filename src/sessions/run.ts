@@ -1,4 +1,4 @@
-import { Scheduler, playClickStep, playCountInStep, playPatternStep } from '../audio/scheduler';
+import { Scheduler, playClickStep, playCountInStep, playPatternStep, playPianoStep } from '../audio/scheduler';
 import { leadIn, stepDurFor, type RunPlan, type RunResult, type SegmentSpec } from '../plan';
 import { Take } from '../scoring';
 import { BEATS_PER_BAR, STEPS, STEPS_PER_BEAT } from '../settings';
@@ -45,9 +45,15 @@ export class RunSession implements Session {
       const start = t;
       const take = new Take(start + this.lead * stepDur, stepDur, spec.bars);
       const sched = new Scheduler(eng, start, stepDur, 0, this.lead + take.steps, (step, time) => {
-        if (step < hear) playPatternStep(eng, spec.pattern, step % STEPS, time);
-        else if (step < this.lead) playCountInStep(eng, step - hear, time);
-        else playClickStep(eng, spec.click, (step - this.lead) % STEPS, time);
+        const backing = !d.settings.pianoMuted;
+        if (step < hear) {
+          playPatternStep(eng, spec.pattern, step % STEPS, time, d.settings.muted);
+          if (backing) playPianoStep(eng, spec.piano, step % STEPS, time, stepDur);
+        } else if (step < this.lead) playCountInStep(eng, step - hear, time);
+        else {
+          playClickStep(eng, spec.click, (step - this.lead) % STEPS, time);
+          if (backing) playPianoStep(eng, spec.piano, (step - this.lead) % STEPS, time, stepDur);
+        }
       });
       t = take.end;
       return { spec, stepDur, start, take, sched };
@@ -112,6 +118,7 @@ export class RunSession implements Session {
     this.shown = key;
     const { take, spec } = this.segs[i];
     this.d.grid.setPattern(spec.pattern);
+    this.d.roll.setNotes(spec.piano);
     this.d.grid.showBar(take, spec.pattern, bar, false);
   }
 

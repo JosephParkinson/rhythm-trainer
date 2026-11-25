@@ -3,11 +3,14 @@ import {
   clampSetting,
   cloneGrid,
   defaultClick,
+  clonePiano,
   isGrid,
   newId,
+  sanitizePiano,
   type ClickPattern,
   type KeyValueStore,
   type Pattern,
+  type PianoNote,
 } from './settings';
 
 export interface Folder {
@@ -22,6 +25,8 @@ export interface SavedPattern {
   folderId: string | null;
   bpm: number;
   grid: Pattern;
+  /** drawn keyboard part (backing) */
+  piano: PianoNote[];
 }
 
 export interface RoutineItem {
@@ -65,6 +70,7 @@ export function sanitizeLibrary(raw: unknown): LibraryData {
       folderId: isStr(p.folderId) && folderIds.has(p.folderId) ? p.folderId : null,
       bpm: clampSetting('bpm', Number(p.bpm), 90),
       grid: p.grid as Pattern,
+      piano: sanitizePiano(p.piano),
     }));
   const patternIds = new Set(patterns.map((p) => p.id));
 
@@ -155,9 +161,9 @@ export class Library {
   // ---------- patterns ----------
 
   /** Creates, or overwrites when `id` is given. Stores a copy of the grid. */
-  savePattern(p: Omit<SavedPattern, 'id'> & { id?: string }): SavedPattern {
+  savePattern(p: Omit<SavedPattern, 'id' | 'piano'> & { id?: string; piano?: PianoNote[] }): SavedPattern {
     const existing = this.pattern(p.id ?? null);
-    const saved: SavedPattern = { ...p, id: existing?.id ?? newId(), grid: cloneGrid(p.grid) };
+    const saved: SavedPattern = { ...p, id: existing?.id ?? newId(), grid: cloneGrid(p.grid), piano: clonePiano(p.piano ?? []) };
     if (existing) Object.assign(existing, saved);
     else this.data.patterns.push(saved);
     this.commit();

@@ -1,4 +1,4 @@
-import { Scheduler, playClickStep } from '../audio/scheduler';
+import { Scheduler, playClickStep, playPianoStep } from '../audio/scheduler';
 import { barRefs, type RunResult } from '../plan';
 import type { Hit } from '../scoring';
 import { STEPS, TRACKS } from '../settings';
@@ -47,7 +47,7 @@ export class ReplaySession implements Session {
 
     for (let k = first.seg; k <= last.seg; k++) {
       const take = result.takes[k];
-      const click = result.plan.segments[k].click;
+      const { click, piano } = result.plan.segments[k];
       const byStep = new Map<number, Hit[]>();
       for (const h of take.hits) byStep.set(h.step, [...(byStep.get(h.step) ?? []), h]);
 
@@ -56,7 +56,10 @@ export class ReplaySession implements Session {
       const start = t - from * take.stepDur;
       const sched = new Scheduler(eng, start, take.stepDur, from, to, (step, time) => {
         playClickStep(eng, click, step % STEPS, time);
-        for (const h of byStep.get(step) ?? []) eng.schedule(TRACKS[h.track].voice, time + h.err / 1000, h.vel);
+        if (!d.settings.pianoMuted) playPianoStep(eng, piano, step % STEPS, time, take.stepDur);
+        for (const h of byStep.get(step) ?? []) {
+          if (!d.settings.muted[h.track]) eng.schedule(TRACKS[h.track].voice, time + h.err / 1000, h.vel);
+        }
       });
       const barBase = refs.findIndex((r) => r.seg === k);
       this.segs.push({ index: k, barBase, from, to, stepDur: take.stepDur, start, sched });

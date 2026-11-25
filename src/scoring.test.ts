@@ -73,6 +73,12 @@ describe('timing stats', () => {
     expect(timing(take, pattern, { sub: 1 })).toMatchObject({ notes: 0, hit: 0, extra: 1 });
   });
 
+  test('muted tracks are left out entirely', () => {
+    const muted = [false, true, false, false]; // snare
+    expect(timing(take, pattern, { muted })).toMatchObject({ notes: 4, hit: 2, extra: 1 });
+    expect(timing(take, pattern, { track: 1, muted })).toMatchObject({ notes: 0, hit: 0, extra: 0 });
+  });
+
   test('summarize merges samples from several takes', () => {
     const a = collect(take, pattern, { fromBar: 0, toBar: 1 });
     const b = collect(take, pattern, { fromBar: 1, toBar: 2 });

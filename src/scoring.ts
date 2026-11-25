@@ -88,6 +88,8 @@ export interface CellFilter {
   sub?: number;
   fromBar?: number;
   toBar?: number;
+  /** per track: skipped entirely (no targets, no extras) */
+  muted?: readonly boolean[];
 }
 
 export function collect(take: Take, pattern: Pattern, f: CellFilter = {}): Sample {
@@ -97,7 +99,7 @@ export function collect(take: Take, pattern: Pattern, f: CellFilter = {}): Sampl
   for (let step = (f.fromBar ?? 0) * STEPS; step < (f.toBar ?? take.bars) * STEPS; step++) {
     if (f.sub !== undefined && step % STEPS_PER_BEAT !== f.sub) continue;
     for (let t = 0; t < TRACKS.length; t++) {
-      if (f.track !== undefined && t !== f.track) continue;
+      if ((f.track !== undefined && t !== f.track) || f.muted?.[t]) continue;
       const hits = take.at(t, step);
       if (pattern[t][step % STEPS]) {
         notes++;

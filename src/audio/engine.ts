@@ -1,3 +1,5 @@
+import { epiano, type PianoVoice } from './epiano';
+
 export type Voice = 'kick' | 'snare' | 'hat' | 'openhat';
 
 /**
@@ -13,6 +15,8 @@ export class Engine {
   private scheduled: GainNode;
   private readonly noise: AudioBuffer;
   private openHat: GainNode | null = null;
+  /** live keyboard notes currently held, by pitch */
+  private readonly held = new Map<number, PianoVoice>();
 
   /** `lowLatency` asks the browser for its smallest output buffer (may crackle on slow machines). */
   constructor(readonly lowLatency: boolean) {
@@ -68,6 +72,28 @@ export class Engine {
   /** 1 kHz test tone, now (lag test). */
   beep() {
     this.tone('sine', 1000, this.ctx.currentTime, 0.5, 0.03, this.out);
+  }
+
+  /** Live keyboard: starts a held note now. */
+  pianoDown(pitch: number, vel: number) {
+    this.held.get(pitch)?.release(this.ctx.currentTime);
+    this.held.set(pitch, epiano(this.ctx, this.out, pitch, this.ctx.currentTime, vel));
+  }
+
+  /** Live keyboard: releases a held note. */
+  pianoUp(pitch: number) {
+    this.held.get(pitch)?.release(this.ctx.currentTime);
+    this.held.delete(pitch);
+  }
+
+  /** A short note now, e.g. when drawing in the piano roll. */
+  pianoAudition(pitch: number) {
+    epiano(this.ctx, this.out, pitch, this.ctx.currentTime, 0.6).release(this.ctx.currentTime + 0.3);
+  }
+
+  /** A keyboard note at a future time, `dur` seconds long; cancelled by cancelScheduled(). */
+  schedulePiano(pitch: number, t: number, dur: number, vel = 0.6) {
+    epiano(this.ctx, this.scheduled, pitch, t, vel).release(t + dur);
   }
 
   /** Plays a voice now. `vel` is 0–1. */

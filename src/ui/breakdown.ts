@@ -29,14 +29,15 @@ export class Breakdown {
     private readonly ev: BreakdownEvents,
   ) {}
 
-  render(result: RunResult | null) {
+  /** `muted` tracks are left out of the figures. */
+  render(result: RunResult | null, muted: readonly boolean[] = []) {
     this.root.replaceChildren();
     this.root.hidden = !result;
     this.segRows = [];
     this.playButtons = [];
     if (!result) return;
 
-    const sum = summariseRun(result);
+    const sum = summariseRun(result, muted);
     const routine = !!result.plan.routineId;
     const rows: { cells: string[]; cls?: string }[] = [];
     const segIndex: number[] = []; // table row → segment, -1 for other rows

@@ -1,12 +1,16 @@
 import { TRACKS, type Settings } from '../settings';
-import { initMidi } from './midi';
+import { initMidi, type NoteEvent } from './midi';
+import { routeNote } from './routing';
 
 export type HitHandler = (track: number, perfMs: number, vel: number) => void;
+/** A MIDI note for the keyboard instrument (on or off). */
+export type PianoHandler = (e: NoteEvent) => void;
 
 /**
- * Routes computer keys and MIDI notes to tracks. Each track has one key and one
- * note. After learn(track), the next key or note becomes that track's binding
- * of that kind and is removed from any other track.
+ * Routes computer keys and MIDI notes to drum tracks, and other MIDI notes to
+ * the keyboard instrument (see routing.ts). Each track has one key and one
+ * note+channel. After learn(track), the next key or note becomes that track's
+ * binding of that kind and is removed from any other track.
  */
 export class Bindings {
   learning: number | null = null;
@@ -16,6 +20,7 @@ export class Bindings {
     private readonly onHit: HitHandler,
     /** bindings or learn state changed */
     private readonly onChange: () => void,
+    private readonly onPiano: PianoHandler,
   ) {
     window.addEventListener('keydown', (e) => this.onKey(e));
     // Clicking anywhere except a binding button cancels learn.
@@ -26,7 +31,7 @@ export class Bindings {
 
   /** `onDevices(null)` means MIDI is unavailable. */
   startMidi(onDevices: (names: string[] | null) => void) {
-    void initMidi((note, vel, ts) => this.onNote(note, vel, ts), onDevices).then((ok) => ok || onDevices(null));
+    void initMidi((e) => this.onNote(e), onDevices).then((ok) => ok || onDevices(null));
   }
 
   learn(track: number | null) {
@@ -63,10 +68,15 @@ export class Bindings {
     this.onHit(track, e.timeStamp, 1);
   }
 
-  private onNote(note: number, vel: number, ts: number) {
-    if (this.learning !== null) return this.assignNote(this.learning, note);
-    const track = this.settings.notes.indexOf(note);
-    if (track >= 0) this.onHit(track, ts, vel);
+  private onNote(e: NoteEvent) {
+    if (this.learning !== null) {
+      if (e.on) this.assignNote(this.learning, e.note, e.channel);
+      return;
+    }
+    const route = routeNote(this.settings, e.note, e.channel);
+    if (route.to === 'drum') {
+      if (e.on) this.onHit(route.track, e.timeStamp, e.vel);
+    } else if (route.to === 'piano') this.onPiano(e);
   }
 
   private assignKey(track: number, key: string) {
@@ -74,8 +84,16 @@ export class Bindings {
     this.learnDone();
   }
 
-  private assignNote(track: number, note: number) {
-    this.settings.notes = rebind(this.settings.notes, track, note, null);
+  /** Binds note+channel, so the same note number on another channel stays free for the keyboard. */
+  private assignNote(track: number, note: number, channel: number) {
+    const { notes, noteChannels } = this.settings;
+    const clash = notes.findIndex((n, t) => n === note && noteChannels[t] === channel);
+    if (clash >= 0) {
+      notes[clash] = null;
+      noteChannels[clash] = null;
+    }
+    notes[track] = note;
+    noteChannels[track] = channel;
     this.learnDone();
   }
 

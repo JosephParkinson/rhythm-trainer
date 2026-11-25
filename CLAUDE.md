@@ -88,6 +88,7 @@ Before its played bars, each segment has a lead-in: one bar of the pattern if `h
 
 - Per cell, the closest hit on a target step is graded (`GOOD_MS`/`OK_MS`) and every other hit is "extra".
 - `collect()` gathers raw errors with an optional filter by track, beat position (`sub`) or bar range.
+- `settings.muted` (the per-row **M** buttons) is applied at render time: `CellFilter.muted` drops those tracks from targets and extras. So muting after a run re-scores it, the same as pattern edits. Muted tracks are also silent in HEAR FIRST, PREVIEW (live) and REPLAY. Runs with anything muted aren't logged to history.
 - `summarize()` merges samples into `TimingStats`: notes, hit, extra, avg (mean |err|), bias (mean err), sd, p90. Everything is raw ms, with no composite scores.
 
 **Library and history** (`library.ts`, `history.ts`) are stored in `localStorage` under `rhythm-trainer-library` and `rhythm-trainer-history`. Both take an injectable `KeyValueStore`, which the tests replace with an in-memory store. Rules:
@@ -129,7 +130,13 @@ The views call `Library` directly and tell `App` only to load a pattern or routi
 
 The mic must be opened with echoCancellation, noiseSuppression and autoGainControl off, or the click gets filtered out. `analyseCalibration()` is pure and tested.
 
-**Input** (`input/bindings.ts`). Each track has one key (`settings.keys`, `''` when unbound) and one MIDI note (`settings.notes`, `null` when unbound, defaulting to GM 36/38/42/46). `learn(track)` makes the next key or note that track's binding and removes it from any other track. Keys are ignored while typing in inputs, dropdowns or dialogs. Hits are silent during calibration so the mic only hears the key.
+**Keyboard part.**
+- **Drawing:** `ui/piano-roll.ts` is a C3–B4 piano roll under the drum grid, with columns aligned to its steps. The notes are `PianoNote {pitch, step, len}` (one bar), stored as `settings.piano` and in `SavedPattern.piano` and `SegmentSpec.piano`.
+- **Sound:** an FM electric piano (`audio/epiano.ts`). Live notes use `Engine.pianoDown/Up`; the backing uses `schedulePiano`.
+- **Playback:** the backing loops in HEAR FIRST, PREVIEW, played bars and REPLAY via `playPianoStep`. It's never scored. `settings.pianoMuted` silences it.
+- **Edits:** happen in place on `settings.piano`, so a running preview hears them. "Modified" (the `*` marker, and whether history logs a run) compares both the drum grid and the piano part.
+
+**Input** (`input/bindings.ts`). Each track has one key (`settings.keys`, `''` when unbound) and one MIDI note plus channel (`settings.notes` and `settings.noteChannels`, defaulting to GM 36/38/42/46 on channel 10; a `null` channel means any channel). `input/routing.ts` (pure, tested) decides where each note goes: a matching drum binding plays the drum; any other note on a channel a drum binding uses is ignored, so pads never play the piano even when they share note numbers with the keys; everything else plays the piano. `learn(track)` makes the next key or note that track's binding and removes it from any other track. Keys are ignored while typing in inputs, dropdowns or dialogs. Hits are silent during calibration so the mic only hears the key.
 
 **Settings** (`settings.ts`) persist under `rhythm-trainer`:
 

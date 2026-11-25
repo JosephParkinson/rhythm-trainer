@@ -2,11 +2,13 @@ import type { Engine } from '../audio/engine';
 import type { Settings } from '../settings';
 import type { ActiveMode, Controls } from '../ui/controls';
 import type { Grid } from '../ui/grid';
+import type { PianoRoll } from '../ui/piano-roll';
 
 export interface Deps {
   eng: Engine;
   settings: Settings;
   grid: Grid;
+  roll: PianoRoll;
   controls: Controls;
   /** Ends `session` as completed. No-op if it's no longer the current session. */
   finish(session: Session): void;

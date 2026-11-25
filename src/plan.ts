@@ -1,12 +1,25 @@
 import type { Library, Routine } from './library';
 import type { Take } from './scoring';
-import { STEPS, STEPS_PER_BEAT, cloneGrid, defaultClick, emptyClick, type ClickPattern, type Pattern, type Settings } from './settings';
+import {
+  STEPS,
+  STEPS_PER_BEAT,
+  cloneGrid,
+  clonePiano,
+  defaultClick,
+  emptyClick,
+  type ClickPattern,
+  type Pattern,
+  type PianoNote,
+  type Settings,
+} from './settings';
 
 /** One pattern within a run. */
 export interface SegmentSpec {
   name: string;
   patternId: string | null;
   pattern: Pattern;
+  /** keyboard backing, looped every bar */
+  piano: PianoNote[];
   /** heard during the played bars */
   click: ClickPattern;
   bpm: number;
@@ -60,6 +73,7 @@ export function editorPlan(s: Settings, name: string): RunPlan {
         name,
         patternId: s.patternId,
         pattern: s.pattern,
+        piano: s.piano,
         click: s.metronome ? defaultClick() : emptyClick(),
         bpm: s.bpm,
         bars: s.bars,
@@ -79,6 +93,7 @@ export function routinePlan(routine: Routine, lib: Library, s: Settings): RunPla
       name: p.name,
       patternId: p.id,
       pattern: cloneGrid(p.grid),
+      piano: clonePiano(p.piano),
       click: cloneGrid(item.click),
       bpm: item.bpm,
       bars: item.bars,

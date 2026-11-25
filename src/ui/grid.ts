@@ -6,6 +6,7 @@ import { fmtMs } from './format';
 export interface GridEvents {
   toggle(track: number, step: number): void;
   bindClick(track: number): void;
+  muteClick(track: number): void;
 }
 
 const SUBDIVISIONS = ['', 'e', '&', 'a'];
@@ -17,6 +18,8 @@ export class Grid {
   private readonly cells: HTMLElement[][] = [];
   private readonly labels: HTMLElement[] = [];
   private readonly binds: HTMLButtonElement[] = [];
+  private readonly mutes: HTMLButtonElement[] = [];
+  private muted: readonly boolean[] = [];
   private readonly flashTimers: number[] = [];
   private playhead = -1;
 
@@ -29,6 +32,12 @@ export class Grid {
       const label = el('span', 'lbl', head);
       label.textContent = track.name;
       this.labels.push(label);
+
+      const mute = el('button', 'btn tiny mute', head);
+      mute.textContent = 'M';
+      mute.title = 'Mute: silent and not scored';
+      mute.addEventListener('click', () => ev.muteClick(t));
+      this.mutes.push(mute);
 
       const bind = el('button', 'bind', head);
       bind.title = 'Click, then press a key or pad';
@@ -60,9 +69,9 @@ export class Grid {
     const s = step % STEPS;
     const cell = this.cells[track][s];
     const target = pattern[track][s];
-    const hits = take.at(track, step);
+    const hits = this.muted[track] ? [] : take.at(track, step);
     cell.querySelectorAll('.mk').forEach((m) => m.remove());
-    cell.classList.toggle('miss', review && target && hits.length === 0);
+    cell.classList.toggle('miss', review && target && hits.length === 0 && !this.muted[track]);
 
     const halfStepMs = take.stepDur * 500;
     for (const { hit, grade } of scoreCell(hits, target)) {
@@ -109,5 +118,17 @@ export class Grid {
 
   setLocked(locked: boolean) {
     this.binds.forEach((b) => (b.disabled = locked));
+  }
+
+  /** Muted rows are dimmed and show no hits. Redraw the bar afterwards to update markers. */
+  setMuted(muted: readonly boolean[]) {
+    this.muted = [...muted];
+    this.mutes.forEach((b, t) => b.classList.toggle('lit', !!muted[t]));
+    this.cells.forEach((row, t) => row.forEach((c) => c.classList.toggle('muted', !!muted[t])));
+  }
+
+  /** Mute buttons stay usable while idle or previewing. */
+  setMuteLocked(locked: boolean) {
+    this.mutes.forEach((b) => (b.disabled = locked));
   }
 }

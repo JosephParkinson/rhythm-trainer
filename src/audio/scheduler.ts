@@ -1,4 +1,4 @@
-import { STEPS, STEPS_PER_BEAT, TRACKS, type ClickPattern, type Pattern } from '../settings';
+import { STEPS, STEPS_PER_BEAT, TRACKS, type ClickPattern, type Pattern, type PianoNote } from '../settings';
 import type { Engine } from './engine';
 
 const INTERVAL_MS = 25;
@@ -53,9 +53,14 @@ export class Scheduler {
 
 // ---------- step helpers ----------
 
-/** Schedules every drum on step `s` of a pattern. */
-export function playPatternStep(eng: Engine, pattern: Pattern, s: number, t: number) {
-  TRACKS.forEach((track, i) => pattern[i][s] && eng.schedule(track.voice, t));
+/** Schedules every unmuted drum on step `s` of a pattern. */
+export function playPatternStep(eng: Engine, pattern: Pattern, s: number, t: number, muted: readonly boolean[] = []) {
+  TRACKS.forEach((track, i) => pattern[i][s] && !muted[i] && eng.schedule(track.voice, t));
+}
+
+/** Schedules every keyboard note starting on step `s`. */
+export function playPianoStep(eng: Engine, piano: readonly PianoNote[], s: number, t: number, stepDur: number) {
+  for (const n of piano) if (n.step === s) eng.schedulePiano(n.pitch, t, n.len * stepDur);
 }
 
 export function playClickStep(eng: Engine, click: ClickPattern, s: number, t: number) {

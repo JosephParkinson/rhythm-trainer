@@ -35,13 +35,14 @@ export interface RunRecord extends RunSummary {
 const STORE_KEY = 'rhythm-trainer-history';
 const MAX_RECORDS = 2000;
 
-export function summariseRun(r: RunResult): RunSummary {
+/** `muted` tracks are left out of every figure. */
+export function summariseRun(r: RunResult, muted: readonly boolean[] = []): RunSummary {
   const per = (f: (seg: number) => Sample) => summarize(r.takes.map((_, i) => f(i)));
   const pattern = (i: number) => r.plan.segments[i].pattern;
   return {
-    total: per((i) => collect(r.takes[i], pattern(i))),
-    tracks: TRACKS.map((_, track) => per((i) => collect(r.takes[i], pattern(i), { track }))),
-    subs: Array.from({ length: STEPS_PER_BEAT }, (_, sub) => per((i) => collect(r.takes[i], pattern(i), { sub }))),
+    total: per((i) => collect(r.takes[i], pattern(i), { muted })),
+    tracks: TRACKS.map((_, track) => per((i) => collect(r.takes[i], pattern(i), { track, muted }))),
+    subs: Array.from({ length: STEPS_PER_BEAT }, (_, sub) => per((i) => collect(r.takes[i], pattern(i), { sub, muted }))),
     segments: r.takes.map((take, i) => {
       const spec = r.plan.segments[i];
       return {
@@ -49,8 +50,8 @@ export function summariseRun(r: RunResult): RunSummary {
         name: spec.name,
         bpm: spec.bpm,
         bars: spec.bars,
-        total: summarize([collect(take, spec.pattern)]),
-        tracks: TRACKS.map((_, track) => summarize([collect(take, spec.pattern, { track })])),
+        total: summarize([collect(take, spec.pattern, { muted })]),
+        tracks: TRACKS.map((_, track) => summarize([collect(take, spec.pattern, { track, muted })])),
       };
     }),
   };

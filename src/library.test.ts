@@ -41,6 +41,14 @@ describe('Library', () => {
     expect(lib.pattern(p.id)).toMatchObject({ bpm: 120 });
   });
 
+  test('saves a copy of the keyboard part, defaulting to none', () => {
+    const piano = [{ pitch: 60, step: 0, len: 4 }];
+    const p = lib.savePattern({ name: 'Keys', folderId: null, bpm: 90, grid: grid(), piano });
+    piano[0].len = 1;
+    expect(new Library(store).pattern(p.id)?.piano).toEqual([{ pitch: 60, step: 0, len: 4 }]);
+    expect(lib.savePattern({ name: 'NoKeys', folderId: null, bpm: 90, grid: grid() }).piano).toEqual([]);
+  });
+
   test('persists and reloads', () => {
     const f = lib.addFolder('Funk');
     const p = lib.savePattern({ name: 'A', folderId: f.id, bpm: 90, grid: grid() });
