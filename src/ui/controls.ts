@@ -107,7 +107,8 @@ export class Controls {
   /** null = MIDI unavailable in this browser. */
   setMidi(devices: string[] | null) {
     this.midi.classList.toggle('on', !!devices?.length);
-    this.midi.title = devices === null ? 'MIDI unavailable in this browser' : devices.join('\n') || 'No MIDI devices';
+    const status = devices === null ? 'MIDI unavailable' : devices.join('\n') || 'No MIDI devices';
+    this.midi.title = `${status}\nClick to rescan`;
   }
 
   update({ mode, bars, reviewBar, routine }: ControlState) {

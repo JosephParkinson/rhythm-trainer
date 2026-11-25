@@ -84,7 +84,9 @@ export class App {
       this.save();
       this.grid.setBinds(this.bindings.labels(), this.bindings.learning);
     });
-    this.bindings.startMidi((names) => this.controls.setMidi(names));
+    const startMidi = () => this.bindings.startMidi((names) => this.controls.setMidi(names));
+    startMidi();
+    $('midi').addEventListener('click', startMidi);
     this.breakdown = new Breakdown($('breakdown'), {
       select: (seg) => !this.session && this.showReview(this.segmentBars(seg).from),
       replay: (seg) => this.replaySegment(seg),

@@ -4,7 +4,8 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
 const DIST = path.join(__dirname, '..', 'dist');
-const ALLOWED_PERMISSIONS = new Set(['media', 'midi']);
+// Chromium asks for Web MIDI as 'midiSysex' even when the page doesn't request sysex.
+const ALLOWED_PERMISSIONS = new Set(['media', 'midi', 'midiSysex']);
 
 // A standard, secure scheme gives the page a stable origin (so localStorage
 // persists across launches) and counts as a secure context (mic, MIDI, AudioWorklet).
