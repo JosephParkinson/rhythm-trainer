@@ -1,6 +1,6 @@
 import type { RunResult } from './plan';
 import { collect, summarize, type Sample, type TimingStats } from './scoring';
-import { STEPS_PER_BEAT, TRACKS, newId, type KeyValueStore } from './settings';
+import { STEPS_PER_BEAT, TRACKS, hasClick, newId, type KeyValueStore } from './settings';
 
 export interface SegmentRecord {
   patternId: string | null;
@@ -19,7 +19,15 @@ export interface RunSummary {
   /** per position in the beat (1, e, &, a), across all segments */
   subs: TimingStats[];
   segments: SegmentRecord[];
+  /**
+   * Played with a metronome (any segment had a click). Runs without one are
+   * harder, so history keeps them apart. Missing on old records = true.
+   */
+  metronome?: boolean;
 }
+
+/** Old records predate the flag; the metronome was on by default then. */
+export const withMetronome = (r: RunSummary) => r.metronome !== false;
 
 export type RunKind = 'pattern' | 'routine';
 
@@ -40,6 +48,7 @@ export function summariseRun(r: RunResult, muted: readonly boolean[] = []): RunS
   const per = (f: (seg: number) => Sample) => summarize(r.takes.map((_, i) => f(i)));
   const pattern = (i: number) => r.plan.segments[i].pattern;
   return {
+    metronome: r.plan.segments.some((s) => hasClick(s.click)),
     total: per((i) => collect(r.takes[i], pattern(i), { muted })),
     tracks: TRACKS.map((_, track) => per((i) => collect(r.takes[i], pattern(i), { track, muted }))),
     subs: Array.from({ length: STEPS_PER_BEAT }, (_, sub) => per((i) => collect(r.takes[i], pattern(i), { sub, muted }))),

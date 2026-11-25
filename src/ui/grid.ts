@@ -11,8 +11,8 @@ export interface GridEvents {
   pageClick(page: number): void;
   /** a dark square was clicked: extend to that many bars */
   extend(bars: number): void;
-  /** a lit square was double- or right-clicked: delete that bar */
-  deleteBar(page: number): void;
+  /** a lit square was double- or right-clicked: delete every bar after it */
+  cutAfter(page: number): void;
   /** the page shown changed (by click or by following playback) */
   pageChanged(page: number): void;
 }
@@ -24,7 +24,7 @@ const FLASH_MS = 90;
  * rows (label light = mute toggle), cells with hit markers.
  * Four bar squares (in the transport row) show the pattern's length (amber) and
  * the bar on screen (bright), pulse on the beat for the bar PLAY is on, and set the
- * length: click a dark one to extend, double- or right-click a lit one to delete that bar.
+ * length: click a dark one to extend, double- or right-click a lit one to delete the bars after it.
  */
 export class Grid {
   private readonly leds: HTMLElement[] = [];
@@ -34,6 +34,7 @@ export class Grid {
   private readonly squares: HTMLButtonElement[] = [];
   private playingPage = -1;
   private beat = false;
+  private ledsOff = false;
   private lengthLocked = false;
   /** the last single click was on a dark square */
   private clickExtended = false;
@@ -50,10 +51,10 @@ export class Grid {
     for (let p = 0; p < MAX_PATTERN_BARS; p++) {
       const sq = el('button', 'barsq', pagesRoot);
       sq.addEventListener('click', (e) => e.detail <= 1 && this.squareClick(p));
-      sq.addEventListener('dblclick', () => !this.clickExtended && this.deleteBar(p));
+      sq.addEventListener('dblclick', () => !this.clickExtended && this.cutAfter(p));
       sq.addEventListener('contextmenu', (e) => {
         e.preventDefault();
-        this.deleteBar(p);
+        this.cutAfter(p);
       });
       this.squares.push(sq);
     }
@@ -145,6 +146,13 @@ export class Grid {
     }
   }
 
+  /** Greys out the step lights (TEST without a metronome). */
+  setStepLedsOff(off: boolean) {
+    if (off === this.ledsOff) return;
+    this.ledsOff = off;
+    this.leds.forEach((l) => l.classList.toggle('off', off));
+  }
+
   /** Column 0–15 of the current page; -1 hides it. */
   setPlayhead(step: number) {
     if (step === this.playhead) return;
@@ -182,8 +190,8 @@ export class Grid {
   }
 
   /** Double-click or right-click on a lit square. (A double-click that started on a dark square only extends.) */
-  private deleteBar(p: number) {
-    if (p < patternBars(this.pattern) && patternBars(this.pattern) > 1 && !this.lengthLocked) this.ev.deleteBar(p);
+  private cutAfter(p: number) {
+    if (p + 1 < patternBars(this.pattern) && !this.lengthLocked) this.ev.cutAfter(p);
   }
 
   private renderPage() {
@@ -201,7 +209,7 @@ export class Grid {
       sq.classList.toggle('beat', p === this.playingPage && this.beat);
       sq.disabled = !inside && this.lengthLocked;
       sq.title = inside
-        ? `Bar ${p + 1}` + (bars > 1 && !this.lengthLocked ? '. Double-click or right-click to delete' : '')
+        ? `Bar ${p + 1}` + (p + 1 < bars && !this.lengthLocked ? `. Double-click or right-click to delete the bar${p + 2 < bars ? 's' : ''} after it` : '')
         : `Click to extend to ${p + 1} bars`;
     });
   }

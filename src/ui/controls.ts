@@ -3,7 +3,8 @@ import { $ } from './dom';
 
 export type Mode = 'idle' | 'test' | 'play' | 'replay' | 'cal' | 'lag';
 export type ActiveMode = Exclude<Mode, 'idle'>;
-type ToggleSetting = 'metronome' | 'sounds' | 'hearFirst' | 'lowLatency';
+const TOGGLES = ['metronome', 'sounds', 'muteOnTest', 'hearFirst', 'lowLatency'] as const;
+type ToggleSetting = (typeof TOGGLES)[number];
 
 /** TEST's red light: off, dim while the pattern/count-in plays, lit while you're being recorded. */
 export type RecordState = 'off' | 'lead' | 'rec';
@@ -62,7 +63,7 @@ export class Controls {
       });
     }
 
-    for (const id of ['metronome', 'sounds', 'hearFirst', 'lowLatency'] as const) {
+    for (const id of TOGGLES) {
       const b = (this.toggles[id] = $<HTMLButtonElement>(id));
       b.addEventListener('click', () => {
         settings[id] = !settings[id];

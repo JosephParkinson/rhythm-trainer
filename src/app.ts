@@ -22,8 +22,7 @@ import {
   emptyPattern,
   loadSettings,
   patternBars,
-  removeBar,
-  removePianoBar,
+  hasClick,
   resizePattern,
   resizePiano,
   sameGrid,
@@ -36,6 +35,7 @@ import { Controls, type ActiveMode, type Mode } from './ui/controls';
 import { confirmBox, promptText } from './ui/dialog';
 import { $ } from './ui/dom';
 import { BindPanel } from './ui/binds';
+import { renderHistory } from './ui/history-view';
 import { Grid } from './ui/grid';
 import { PatternsView } from './ui/patterns-view';
 import { PianoRoll } from './ui/piano-roll';
@@ -72,6 +72,8 @@ export class App {
   private reviewBar = 0;
   /** pattern step PLAY resumes from after a pause */
   private playFrom = 0;
+  /** result segment whose replay was paused (▶ resumes it from the review bar) */
+  private replayPaused: number | null = null;
   /** last PRACTICE sub-tab */
   private practiceView: (typeof PRACTICE_VIEWS)[number] = 'patterns';
 
@@ -81,7 +83,7 @@ export class App {
       muteClick: (t) => this.toggleMute(t),
       pageClick: (p) => this.pageClick(p),
       extend: (bars) => this.extend(bars),
-      deleteBar: (p) => void this.deleteBar(p),
+      cutAfter: (p) => void this.cutAfter(p),
       pageChanged: (p) => this.roll.setPage(p),
     });
     this.roll = new PianoRoll($('roll'), {
@@ -138,6 +140,7 @@ export class App {
     new PatternsView($('patterns'), this.library, this.history, (id) => this.loadPattern(id));
     new RoutinesView($('routines'), this.library, this.history, (id) => this.loadRoutine(id));
     this.library.onChange(() => this.libraryChanged());
+    this.history.onChange(() => this.renderRunHistory());
 
     if (!this.library.pattern(this.settings.patternId)) this.settings.patternId = null;
     this.binds.set(this.bindings.labels(), null);
@@ -218,10 +221,16 @@ export class App {
         // From the bar on screen to the end of its pattern.
         if (!this.result) return;
         const from = this.reviewBar;
-        const { to } = this.segmentBars(barRefs(this.result)[from].seg);
+        const seg = barRefs(this.result)[from].seg;
+        const { from: segFrom, to } = this.segmentBars(seg);
+        this.replayPaused = null;
         this.showReview(from);
         const s = new ReplaySession(d, this.result, from, to, (bar) => this.showReview(bar));
-        return this.run(s, () => this.showReview(from));
+        return this.run(s, (done) => {
+          // Finished: back to the pattern's first bar. Paused: stay on the bar it stopped on.
+          this.replayPaused = done ? null : seg;
+          this.showReview(done ? segFrom : this.reviewBar);
+        });
       }
       case 'cal': {
         const s = new CalibrateSession(d, (ms) => this.setLatency(ms));
@@ -233,17 +242,28 @@ export class App {
   }
 
   /** Space bar: PLAY / PAUSE. */
+  /** Space bar: PLAY / pause, or pauses a replay. */
   private playPause() {
-    if (this.session?.mode === 'play') this.end(this.session, false);
+    if (this.session?.mode === 'play' || this.session?.mode === 'replay') this.end(this.session, false);
     else if (!this.session) void this.start('play');
   }
 
-  /** Replays one pattern of the result from its first bar, switching from any replay in progress. */
+  /**
+   * A pattern's ▶ in the breakdown: replays it, or pauses it if it's the one
+   * replaying. After a pause, ▶ resumes from the bar it stopped on; otherwise it
+   * starts from the pattern's first bar (switching from any other replay).
+   */
   private replaySegment(seg: number) {
     if (!this.result) return;
-    if (this.session?.mode === 'replay') this.end(this.session, false);
+    if (this.session?.mode === 'replay') {
+      const current = barRefs(this.result)[this.reviewBar].seg;
+      this.end(this.session, false);
+      if (current === seg) return; // paused
+    }
     if (this.session) return;
-    this.reviewBar = this.segmentBars(seg).from;
+    const { from, to } = this.segmentBars(seg);
+    const resume = this.replayPaused === seg && this.reviewBar >= from && this.reviewBar < to;
+    this.reviewBar = resume ? this.reviewBar : from;
     void this.start('replay');
   }
 
@@ -277,8 +297,9 @@ export class App {
 
   private hit(track: number, perfMs: number, vel: number) {
     const s = this.session;
-    // Mic tests need silence so the mic only hears the key.
-    if (!s?.mutesHits && this.settings.sounds) this.eng.trigger(TRACKS[track].voice, vel);
+    // Mic tests need silence so the mic only hears the key; MUTE ON TEST silences hits during TEST.
+    const silent = s?.mutesHits || (s?.mode === 'test' && this.settings.muteOnTest);
+    if (!silent && this.settings.sounds) this.eng.trigger(TRACKS[track].voice, vel);
     this.grid.flash(track);
     s?.hit?.(track, perfMs, vel);
   }
@@ -378,6 +399,7 @@ export class App {
     if (this.routineId && !this.routine) this.loadRoutine(null);
     else if (!this.session && !this.result) this.showIdle();
     else this.renderSource();
+    this.renderRunHistory(); // a rename or delete changes its title or whether it shows
   }
 
   // ---------- editing ----------
@@ -417,14 +439,15 @@ export class App {
     this.lengthChanged(bars - 1);
   }
 
-  /** Double-clicking a lit bar square: delete that bar (asks first if it has anything in it). */
-  private async deleteBar(bar: number) {
+  /** Double- or right-clicking a lit bar square: delete every bar after it (asks first if they have anything in them). */
+  private async cutAfter(bar: number) {
     const bars = patternBars(this.settings.pattern);
-    if (!this.lengthEditable || bars < 2 || bar >= bars) return;
-    if (this.hasContentIn(bar) && !(await confirmBox(`DELETE BAR ${bar + 1}?`, 'DELETE'))) return;
-    this.settings.pattern = removeBar(this.settings.pattern, bar);
-    this.settings.piano = removePianoBar(this.settings.piano, bar);
-    this.lengthChanged(Math.min(bar, bars - 2));
+    if (!this.lengthEditable || bar + 1 >= bars) return;
+    const which = bar + 2 === bars ? `BAR ${bars}` : `BARS ${bar + 2}-${bars}`;
+    if (this.hasContentFrom((bar + 1) * STEPS) && !(await confirmBox(`DELETE ${which}?`, 'DELETE'))) return;
+    this.settings.pattern = resizePattern(this.settings.pattern, bar + 1);
+    this.settings.piano = resizePiano(this.settings.piano, bars, bar + 1);
+    this.lengthChanged(bar);
   }
 
   private get lengthEditable() {
@@ -439,10 +462,9 @@ export class App {
     this.grid.setPage(page);
   }
 
-  /** Any drum step or keyboard note in bar `bar`. */
-  private hasContentIn(bar: number) {
-    const [a, b] = [bar * STEPS, (bar + 1) * STEPS];
-    return this.settings.pattern.some((r) => r.slice(a, b).some(Boolean)) || this.settings.piano.some((n) => n.step >= a && n.step < b);
+  /** Any drum step or keyboard note at or after `step`. */
+  private hasContentFrom(step: number) {
+    return this.settings.pattern.some((r) => r.slice(step).some(Boolean)) || this.settings.piano.some((n) => n.step >= step);
   }
 
   private pageClick(page: number) {
@@ -480,7 +502,22 @@ export class App {
 
   private setResult(r: RunResult | null) {
     this.result = r;
+    this.replayPaused = null;
     this.breakdown.render(r, this.settings.muted);
+    this.renderRunHistory();
+  }
+
+  /** Under the run's breakdown: the progress history of the routine or saved pattern that was run. */
+  private renderRunHistory() {
+    const box = $('runHistory');
+    box.replaceChildren();
+    const r = this.result;
+    const routine = r?.plan.routineId ? this.library.routine(r.plan.routineId) : null;
+    const pattern = r && !r.plan.routineId ? this.library.pattern(this.settings.patternId) : null;
+    const ref = routine ? { kind: 'routine' as const, ...routine } : pattern ? { kind: 'pattern' as const, ...pattern } : null;
+    box.hidden = !ref;
+    // Open on the same kind of run as this one (with or without the metronome).
+    if (ref) renderHistory(box, this.history.for(ref.kind, ref.id), ref.name, r!.plan.segments.some((s) => hasClick(s.click)));
   }
 
   private save() {

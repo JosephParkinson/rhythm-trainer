@@ -51,6 +51,8 @@ export interface Settings {
   metronome: boolean;
   /** drum sound on live hits */
   sounds: boolean;
+  /** no drum sound on live hits during TEST */
+  muteOnTest: boolean;
   /** play one bar of the pattern before the count-in */
   hearFirst: boolean;
   /** smallest audio output buffer */
@@ -105,20 +107,10 @@ export function resizePiano(notes: readonly PianoNote[], fromBars: number, toBar
   return out;
 }
 
-/** Removes one bar; later bars move up. */
-export function removeBar(p: Pattern, bar: number): Pattern {
-  return p.map((r) => [...r.slice(0, bar * STEPS), ...r.slice((bar + 1) * STEPS)]);
-}
-
-/** Matches removeBar: notes in that bar are dropped, later ones move up a bar. */
-export function removePianoBar(notes: readonly PianoNote[], bar: number): PianoNote[] {
-  return notes
-    .filter((n) => Math.floor(n.step / STEPS) !== bar)
-    .map((n) => (n.step >= (bar + 1) * STEPS ? { ...n, step: n.step - STEPS } : { ...n }));
-}
-
 export const defaultClick = (): ClickPattern => [row([0]), row([4, 8, 12])];
 export const emptyClick = (): ClickPattern => [row(), row()];
+/** The click track has at least one click (the metronome is on). */
+export const hasClick = (c: ClickPattern) => c.some((r) => r.some(Boolean));
 export const cloneGrid = (g: boolean[][]) => g.map((r) => [...r]);
 export const clonePiano = (p: readonly PianoNote[]) => p.map((n) => ({ ...n }));
 export const samePiano = (a: readonly PianoNote[], b: readonly PianoNote[]) => {
@@ -150,6 +142,7 @@ export function defaultSettings(): Settings {
     latency: 0,
     metronome: true,
     sounds: true,
+    muteOnTest: false,
     hearFirst: false,
     lowLatency: true,
     keys: ['a', 's', 'd', 'f'],
@@ -195,7 +188,7 @@ export function sanitize(raw: unknown): Settings {
   for (const id of Object.keys(NUMBER_LIMITS) as NumberSetting[]) {
     if (typeof r[id] === 'number') s[id] = clampSetting(id, r[id], s[id]);
   }
-  for (const id of ['metronome', 'sounds', 'hearFirst', 'lowLatency', 'pianoMuted', 'pianoOpen'] as const) {
+  for (const id of ['metronome', 'sounds', 'muteOnTest', 'hearFirst', 'lowLatency', 'pianoMuted', 'pianoOpen'] as const) {
     if (typeof r[id] === 'boolean') s[id] = r[id];
   }
   if (isArrayOf<string>(r.keys, TRACKS.length, (k) => typeof k === 'string' && k.length <= 1)) s.keys = r.keys;

@@ -7,11 +7,13 @@ import { table } from './table';
 import { button, heading } from './widgets';
 
 const POSITIONS = ['1', 'E', '&', 'A'];
+const PLAY = '▶';
+const PAUSE = '❚❚';
 
 export interface BreakdownEvents {
   /** a pattern row was clicked */
   select(seg: number): void;
-  /** a pattern's ▶ was clicked */
+  /** a pattern's ▶ (or, while it replays, its pause) was clicked */
   replay(seg: number): void;
 }
 
@@ -70,7 +72,7 @@ export class Breakdown {
       this.segRows[seg] = tr;
       tr.title = 'Review this pattern';
       tr.addEventListener('click', () => this.ev.select(seg));
-      const play = button(tr.cells[0], '▶', () => this.ev.replay(seg), 'btn tiny');
+      const play = button(tr.cells[0], PLAY, () => this.ev.replay(seg), 'btn tiny');
       play.title = 'Replay this pattern';
       play.addEventListener('click', (e) => e.stopPropagation());
       tr.cells[0].prepend(play);
@@ -78,10 +80,15 @@ export class Breakdown {
     });
   }
 
-  /** Highlights the pattern under review, or the one being replayed (lit ▶). */
+  /** Highlights the pattern under review; the one being replayed gets a lit pause button. */
   setCurrent(seg: number, replaying: boolean) {
     this.segRows.forEach((tr, i) => tr.classList.toggle('cur', i === seg));
-    this.playButtons.forEach((b, i) => b.classList.toggle('lit', replaying && i === seg));
+    this.playButtons.forEach((b, i) => {
+      const on = replaying && i === seg;
+      b.classList.toggle('lit', on);
+      b.textContent = on ? PAUSE : PLAY;
+      b.title = on ? 'Pause' : 'Replay this pattern';
+    });
   }
 
   /** Locks the ▶ buttons and row clicks (e.g. during a preview or calibration). */

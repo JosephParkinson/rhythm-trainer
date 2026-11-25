@@ -20,14 +20,23 @@ function svg<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string,
   return e;
 }
 
-/** Rounds up to 1, 2 or 5 × 10^n. */
-function niceMax(v: number) {
-  const p = 10 ** Math.floor(Math.log10(Math.max(v, 1)));
-  return [1, 2, 5, 10].map((m) => m * p).find((x) => x >= v) ?? 10 * p;
+const MAX_TICKS = 5;
+
+/**
+ * Axis from 0 to just above the biggest value: a 1, 2 or 5 × 10^n step chosen so
+ * at most MAX_TICKS steps cover the data, then the top is the first step past it.
+ */
+export function niceAxis(maxValue: number) {
+  const v = maxValue > 0 ? maxValue : 1;
+  const raw = v / MAX_TICKS;
+  const p = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 5, 10].map((m) => m * p).find((s) => s >= raw) ?? 10 * p;
+  const ticks = Math.ceil(v / step - 1e-9);
+  return { max: step * ticks, step, ticks };
 }
 
 /**
- * Line chart of values over attempts (one shared ms axis from 0). Legend above,
+ * Line chart of values over attempts (one shared ms axis from 0 to just above the biggest value). Legend above,
  * direct labels at the line ends, crosshair + tooltip on hover.
  */
 export function lineChart(parent: HTMLElement, series: Series[], tooltip: (i: number) => string) {
@@ -44,15 +53,14 @@ export function lineChart(parent: HTMLElement, series: Series[], tooltip: (i: nu
   const root = svg('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img' }, wrap);
   const iw = W - M.l - M.r;
   const ih = H - M.t - M.b;
-  const max = niceMax(Math.max(10, ...series.flatMap((s) => s.values)));
+  const { max, step, ticks } = niceAxis(Math.max(0, ...series.flatMap((s) => s.values).filter(Number.isFinite)));
   const x = (i: number) => M.l + (n === 1 ? iw / 2 : (i / (n - 1)) * iw);
   const y = (v: number) => M.t + ih - (v / max) * ih;
 
-  const ticks = String(max)[0] === '2' ? 4 : 5; // whole-number steps for 1/2/5 × 10^n
   for (let k = 0; k <= ticks; k++) {
-    const v = (max / ticks) * k;
+    const v = step * k;
     svg('line', { x1: M.l, x2: M.l + iw, y1: y(v), y2: y(v), class: 'gridline' }, root);
-    svg('text', { x: M.l - 6, y: y(v) + 3, class: 'axis', 'text-anchor': 'end' }, root).textContent = String(v);
+    svg('text', { x: M.l - 6, y: y(v) + 3, class: 'axis', 'text-anchor': 'end' }, root).textContent = String(+v.toFixed(3));
   }
   const xTicks = n <= 10 ? [...Array(n).keys()] : [0, Math.round((n - 1) / 2), n - 1];
   for (const i of xTicks) {

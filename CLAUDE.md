@@ -64,13 +64,13 @@ Tests cover the pure logic: scoring, settings and library sanitising, library op
 
 It runs **at most one `Session` at a time**. A session is one transport activity:
 
-- `sessions/run.ts` (mode `test`, the TEST button): plays a `RunPlan` and records a `Take` per segment. It drives TEST's red light via `controls.setRecording`: dim during the lead-in, lit while recording.
+- `sessions/run.ts` (mode `test`, the TEST button): plays a `RunPlan` and records a `Take` per segment. It drives TEST's red light via `controls.setRecording`: dim during the lead-in, lit while recording. In a segment with no click (metronome off), the step lights are greyed out (`grid.setStepLedsOff`) so they can't act as a visual metronome.
 - `sessions/replay.ts`: plays a result's hits back at their real times, with the click that was heard, for a global bar range. It has no button: ▶ in the breakdown table replays that pattern (segment). Clicking a pattern row jumps the review to it, and the ← → keys step through review bars.
-- `sessions/play.ts` (mode `play`, the PLAY button or the space bar): loops one pattern, reading it live so edits are heard. Pausing stores `position`, and the next PLAY resumes from there. The space bar only does this when it isn't bound to a drum.
+- `sessions/play.ts` (mode `play`, the PLAY button or the space bar): loops one pattern, reading it live so edits are heard. Pausing stores `position`, and the next PLAY resumes from there. Live hits are graded into a throwaway `Take` per pass and drawn like TEST's markers (only for the bar on screen); a new pass starts half a step before its first 16th, which wipes them. Nothing from PLAY is kept or logged. The space bar only does this when it isn't bound to a drum.
 - `sessions/calibrate.ts`: runs mic latency calibration.
 - `sessions/lag.ts`: LAG TEST, which measures tap-to-sound delay with the mic.
 
-Mic tests set `mutesHits`, so hits make no drum sound.
+Mic tests set `mutesHits`, so hits make no drum sound. The MUTE ON TEST setting (`settings.muteOnTest`, in the settings panel) does the same for live drum hits during TEST only; the pattern, click and keyboard part still play.
 
 `App.run()` drives `session.frame()` from `requestAnimationFrame` and forwards hits to `session.hit()`. A session ends either by calling `deps.finish(this)` itself (completed) or when the user presses the same button again (cancelled). Either way `stop()` is called exactly once, then the `onEnd(completed)` callback passed to `run()`. To add a mode:
 
@@ -113,6 +113,7 @@ Before its played bars, each segment has a lead-in: one bar of the pattern if `h
 - Deleting a pattern removes it from every routine.
 - Every `Library` mutation saves and notifies `onChange` listeners. The views re-render from scratch on change.
 - History keeps a `summariseRun()` summary per run, not raw hits, capped at 2000 records.
+- Each record notes whether the metronome was on (`metronome`: any segment had a click). Runs without it are harder, so the history view shows them separately (METRONOME / NO METRONOME tabs). Old records without the flag count as metronome-on (`withMetronome`).
 - Routines always log. A single TEST logs only if the editor holds a saved pattern *unmodified* (`sameGrid`).
 
 **UI** (`ui/`):
@@ -120,7 +121,7 @@ Before its played bars, each segment has a lead-in: one bar of the pattern if `h
 - `grid.ts` and `controls.ts` make up the trainer.
 - `breakdown.ts` is the per-run table.
 - `patterns-view.ts` and `routines-view.ts` are the PRACTICE tab.
-- `history-view.ts` and `chart.ts` show progress.
+- `history-view.ts` and `chart.ts` show progress: in the PRACTICE tab, and in the trainer under a run's breakdown (`#runHistory`, the routine's or saved pattern's history; hidden for unsaved patterns). It re-renders when history or the library changes.
 - `dialog.ts` provides the prompt and confirm windows.
 - `widgets.ts` and `table.ts` are small DOM builders.
 
@@ -146,7 +147,7 @@ The views call `Library` directly and tell `App` only to load a pattern or routi
 
 The mic must be opened with echoCancellation, noiseSuppression and autoGainControl off, or the click gets filtered out. `analyseCalibration()` is pure and tested.
 
-**Pattern length and pages.** A pattern is 1–4 bars: each `pattern` row is 16 × bars long, and the length is derived from the row length (`patternBars`). The four bar squares at the right of the transport row (next to TEST and PLAY) set it: click a dark square to extend, which repeats the existing bars (`resizePattern`, `resizePiano`); double-click or right-click a lit square to delete that bar, moving later bars up and asking first if it has anything in it (`removeBar`, `removePianoBar`). A double-click that starts on a dark square only extends. Anywhere a take step meets the pattern, it indexes `step % patternSteps(pattern)`, so the pattern loops over BARS. HEAR FIRST plays the whole pattern once. The grid and piano roll show one bar (page) at a time; `Grid.setPage` fires `pageChanged`, which keeps the roll in sync. TEST and REPLAY follow the playing bar. PLAY doesn't: it marks the playing bar's square (`setPlayingPage`) and only runs the step lights while that bar is on screen. Squares: amber = inside the pattern, bright = on screen; PLAY's bar pulses on each beat (the `beat` class for the first 16th of the beat). Piano notes may sit in any bar but not cross a bar line. Click tracks stay one bar long.
+**Pattern length and pages.** A pattern is 1–4 bars: each `pattern` row is 16 × bars long, and the length is derived from the row length (`patternBars`). The four bar squares at the right of the transport row (next to TEST and PLAY) set it: click a dark square to extend, which repeats the existing bars (`resizePattern`, `resizePiano`); double-click or right-click a lit square to delete every bar after it, asking first if they have anything in them (also `resizePattern`/`resizePiano`). A double-click that starts on a dark square only extends. Anywhere a take step meets the pattern, it indexes `step % patternSteps(pattern)`, so the pattern loops over BARS. HEAR FIRST plays the whole pattern once. The grid and piano roll show one bar (page) at a time; `Grid.setPage` fires `pageChanged`, which keeps the roll in sync. TEST and REPLAY follow the playing bar. PLAY doesn't: it marks the playing bar's square (`setPlayingPage`) and only runs the step lights while that bar is on screen. Squares: amber = inside the pattern, bright = on screen; PLAY's bar pulses on each beat (the `beat` class for the first 16th of the beat). Piano notes may sit in any bar but not cross a bar line. Click tracks stay one bar long.
 
 **Status readouts.** There's no main LCD. `controls.status()` writes the small readout next to the transport (count-in, BAR n/m, routine progress). `controls.testStatus()` writes the readout in the settings panel (the cog), which also holds LATENCY, CALIBRATE, LAG TEST, HEAR FIRST, LOW LATENCY and the OUT figure.
 
@@ -168,4 +169,4 @@ The mic must be opened with echoCancellation, noiseSuppression and autoGainContr
 
 Retro 2000s drum-machine look: bevelled grey panels, LED indicators, green LCD text, Courier for data. On/off settings are LED toggles (`.toggle`, like the MIDI light), never browser checkboxes. Icons are small inline SVGs in `currentColor`. Use the minimum text needed and keep labels terse and uppercase. Put explanations in `title` tooltips rather than on the page. Avoid modern flat or "slick" styling.
 
-The history chart's series colours (AVG `#c4841c`, SD `#3f8ee6`) were checked with the dataviz palette validator against the LCD background `#0c180a`. Re-check if you add a series or change the background.
+The history chart uses the app's own colours: AVG in LED amber `#ffb02e` (`--led`) and SD in a darker LCD green `#45a535`. Both were checked with the dataviz palette validator against the LCD background `#0c180a`. Colour-blind separation (ΔE 10), normal-vision separation and contrast pass. The amber is deliberately brighter than the validator's lightness band, to match the LEDs. Amber against green only separates for red-green colour blindness through a lightness difference, so keep the green darker than the amber. Re-check if you add a series or change the background.

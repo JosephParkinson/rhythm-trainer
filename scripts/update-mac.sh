@@ -17,6 +17,8 @@ main() {
   backups="$HOME/Library/Application Support/$app_name Backups"
   log="$HOME/Library/Logs/$app_name/update.log"
   mkdir -p "$(dirname "$log")"
+  # Keep the previous run's log too (a failed run is usually followed by a successful retry).
+  [ -f "$log" ] && mv "$log" "${log%.log}.prev.log"
   exec > >(tee "$log") 2>&1
   echo "== Update started $(date)"
 

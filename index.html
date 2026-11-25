@@ -34,6 +34,7 @@
             <label title="Subtracted from every hit">LATENCY <input id="latency" type="number" /> MS</label>
             <button id="cal" class="btn small">CALIBRATE</button>
             <button id="lag" class="btn small" title="Measure the delay from hitting a pad or key to hearing the sound">LAG TEST</button>
+            <button id="muteOnTest" class="toggle" title="No drum sounds from your hits during TEST">MUTE ON TEST</button>
             <button id="hearFirst" class="toggle" title="Play the pattern once before the count-in">HEAR FIRST</button>
             <button id="lowLatency" class="toggle" title="Smallest audio buffer. Turn off if you hear crackles.">LOW LATENCY</button>
             <span id="outlat" class="outlat push" title="Audio output delay reported by the browser">OUT --</span>
@@ -95,6 +96,7 @@
         </div>
 
         <div id="breakdown" class="panel breakdown" hidden></div>
+        <div id="runHistory" class="panel historybox" hidden></div>
       </div>
 
       <div id="view-practice" hidden>

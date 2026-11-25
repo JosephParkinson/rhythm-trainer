@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from 'vitest';
-import { History } from './history';
+import { History, withMetronome } from './history';
 import { Library, sanitizeLibrary } from './library';
 import { editorPlan, routinePlan, barRefs, type RunResult } from './plan';
 import { Take } from './scoring';
@@ -157,5 +157,15 @@ describe('plans and history', () => {
     h.remove('pattern', 'p1');
     expect(h.for('pattern', 'p1')).toHaveLength(0);
     expect(h.for('pattern', 'p2')).toHaveLength(1);
+  });
+
+  test('history records whether the metronome was on; old records count as on', () => {
+    const h = new History(store);
+    const take = new Take(0, 0.1, 1);
+    h.add('pattern', 'm', { plan: editorPlan({ ...defaultSettings(), metronome: true }, 'X'), takes: [take] });
+    h.add('pattern', 'm', { plan: editorPlan({ ...defaultSettings(), metronome: false }, 'X'), takes: [take] });
+    expect(h.for('pattern', 'm').map(withMetronome)).toEqual([true, false]);
+    const { metronome: _, ...old } = h.for('pattern', 'm')[1];
+    expect(withMetronome(old)).toBe(true);
   });
 });

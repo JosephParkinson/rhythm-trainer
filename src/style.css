@@ -369,6 +369,12 @@ input:disabled,
   box-shadow: 0 0 6px #ff3b2e;
 }
 
+/* TEST without a metronome: no visual click either */
+.stepled.off {
+  background: #3a3c40;
+  box-shadow: none;
+}
+
 .beatnum {
   text-align: center;
   color: var(--dim);
@@ -604,6 +610,21 @@ table.data .ctl {
 .breakdown,
 .historybox {
   margin-top: 8px;
+}
+
+.histhead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.histhead .coltitle {
+  margin-bottom: 0 !important;
+}
+
+.histhead .push {
+  margin-left: auto;
 }
 
 .breakdown .coltitle,

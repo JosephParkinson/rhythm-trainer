@@ -1,7 +1,7 @@
 import { Scheduler, playClickStep, playCountInStep, playPatternStep, playPianoStep } from '../audio/scheduler';
 import { leadIn, stepDurFor, type RunPlan, type RunResult, type SegmentSpec } from '../plan';
 import { Take } from '../scoring';
-import { BEATS_PER_BAR, STEPS, STEPS_PER_BEAT, patternSteps } from '../settings';
+import { BEATS_PER_BAR, STEPS, STEPS_PER_BEAT, hasClick, patternSteps } from '../settings';
 import type { Deps, Session } from './session';
 
 const LEAD_IN = 0.25;
@@ -102,7 +102,10 @@ export class RunSession implements Session {
       text = `BAR ${bar + 1}/${seg.spec.bars}`;
     }
 
-    grid.setPlayhead(playhead);
+    // Without a metronome the step lights would be a visual click, so they're greyed out.
+    const noClick = !hasClick(seg.spec.click);
+    grid.setStepLedsOff(noClick);
+    grid.setPlayhead(noClick ? -1 : playhead);
     controls.status(this.plan.routineId ? `${i + 1}/${this.segs.length} ${seg.spec.name.slice(0, MAX_NAME)}  ${text}` : text);
   }
 
@@ -118,6 +121,7 @@ export class RunSession implements Session {
   }
 
   stop() {
+    this.d.grid.setStepLedsOff(false);
     this.segs.forEach((s) => s.sched.stop());
     this.d.eng.cancelScheduled();
   }
