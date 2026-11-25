@@ -22,6 +22,8 @@ import {
   emptyPattern,
   loadSettings,
   patternBars,
+  removeBar,
+  removePianoBar,
   resizePattern,
   resizePiano,
   sameGrid,
@@ -33,6 +35,7 @@ import { Breakdown } from './ui/breakdown';
 import { Controls, type ActiveMode, type Mode } from './ui/controls';
 import { confirmBox, promptText } from './ui/dialog';
 import { $ } from './ui/dom';
+import { BindPanel } from './ui/binds';
 import { Grid } from './ui/grid';
 import { PatternsView } from './ui/patterns-view';
 import { PianoRoll } from './ui/piano-roll';
@@ -56,6 +59,7 @@ export class App {
   private readonly roll: PianoRoll;
   private readonly controls: Controls;
   private readonly bindings: Bindings;
+  private readonly binds: BindPanel;
   private readonly breakdown: Breakdown;
   /** Created on first use: browsers only allow audio after a user gesture. */
   private engine: Engine | null = null;
@@ -74,10 +78,10 @@ export class App {
   constructor() {
     this.grid = new Grid($('grid'), $('pages'), {
       toggle: (t, s) => this.editPattern(() => (this.settings.pattern[t][s] = !this.settings.pattern[t][s])),
-      bindClick: (t) => this.bindings.learn(this.bindings.learning === t ? null : t),
       muteClick: (t) => this.toggleMute(t),
       pageClick: (p) => this.pageClick(p),
-      lengthClick: (bars) => void this.setLength(bars),
+      extend: (bars) => this.extend(bars),
+      deleteBar: (p) => void this.deleteBar(p),
       pageChanged: (p) => this.roll.setPage(p),
     });
     this.roll = new PianoRoll($('roll'), {
@@ -96,12 +100,13 @@ export class App {
         }
       },
     });
+    this.binds = new BindPanel($('binds'), (t) => this.bindings.learn(this.bindings.learning === t ? null : t));
     this.bindings = new Bindings(
       this.settings,
       (t, p, v) => this.hit(t, p, v),
       () => {
         this.save();
-        this.grid.setBinds(this.bindings.labels(), this.bindings.learning);
+        this.binds.set(this.bindings.labels(), this.bindings.learning);
       },
       (e) => this.pianoNote(e),
       () => this.playPause(),
@@ -135,7 +140,7 @@ export class App {
     this.library.onChange(() => this.libraryChanged());
 
     if (!this.library.pattern(this.settings.patternId)) this.settings.patternId = null;
-    this.grid.setBinds(this.bindings.labels(), null);
+    this.binds.set(this.bindings.labels(), null);
     this.grid.setMuted(this.settings.muted);
     this.renderPianoPanel();
     this.setView('trainer');
@@ -403,29 +408,41 @@ export class App {
     this.renderSource();
   }
 
-  /**
-   * Bar squares: growing repeats the existing bars, shrinking drops the end
-   * (after a confirm if anything would be lost). Shows the bar that was clicked.
-   */
-  private async setLength(bars: number) {
+  /** Clicking a dark bar square: grow to `bars`, repeating the existing bars, and show the bar clicked. */
+  private extend(bars: number) {
     const from = patternBars(this.settings.pattern);
-    if (this.mode !== 'idle' || this.routineId || bars === from) return;
-    if (bars < from && this.hasContentFrom(bars * STEPS)) {
-      const which = bars + 1 === from ? `BAR ${from}` : `BARS ${bars + 1}-${from}`;
-      if (!(await confirmBox(`SHORTEN TO ${bars} BAR${bars > 1 ? 'S' : ''}? ${which} WILL BE DELETED.`, 'SHORTEN'))) return;
-    }
+    if (!this.lengthEditable || bars <= from) return;
     this.settings.pattern = resizePattern(this.settings.pattern, bars);
     this.settings.piano = resizePiano(this.settings.piano, from, bars);
+    this.lengthChanged(bars - 1);
+  }
+
+  /** Double-clicking a lit bar square: delete that bar (asks first if it has anything in it). */
+  private async deleteBar(bar: number) {
+    const bars = patternBars(this.settings.pattern);
+    if (!this.lengthEditable || bars < 2 || bar >= bars) return;
+    if (this.hasContentIn(bar) && !(await confirmBox(`DELETE BAR ${bar + 1}?`, 'DELETE'))) return;
+    this.settings.pattern = removeBar(this.settings.pattern, bar);
+    this.settings.piano = removePianoBar(this.settings.piano, bar);
+    this.lengthChanged(Math.min(bar, bars - 2));
+  }
+
+  private get lengthEditable() {
+    return this.mode === 'idle' && !this.routineId;
+  }
+
+  private lengthChanged(page: number) {
     this.playFrom = 0;
     this.save();
     this.setResult(null); // the review no longer matches the pattern
     this.showIdle();
-    this.grid.setPage(bars - 1);
+    this.grid.setPage(page);
   }
 
-  /** Any drum step or keyboard note at or after `step`. */
-  private hasContentFrom(step: number) {
-    return this.settings.pattern.some((r) => r.slice(step).some(Boolean)) || this.settings.piano.some((n) => n.step >= step);
+  /** Any drum step or keyboard note in bar `bar`. */
+  private hasContentIn(bar: number) {
+    const [a, b] = [bar * STEPS, (bar + 1) * STEPS];
+    return this.settings.pattern.some((r) => r.slice(a, b).some(Boolean)) || this.settings.piano.some((n) => n.step >= a && n.step < b);
   }
 
   private pageClick(page: number) {
@@ -552,7 +569,7 @@ export class App {
   private refresh() {
     const busy = this.mode !== 'idle';
     this.controls.update({ mode: this.mode, routine: !!this.routineId });
-    this.grid.setLocked(busy);
+    this.binds.setLocked(busy);
     this.grid.setLengthLocked(busy || !!this.routineId);
     this.grid.setMuteLocked(busy && this.mode !== 'play');
     this.roll.setLocked(!this.editable);

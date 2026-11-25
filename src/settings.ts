@@ -104,6 +104,19 @@ export function resizePiano(notes: readonly PianoNote[], fromBars: number, toBar
   }
   return out;
 }
+
+/** Removes one bar; later bars move up. */
+export function removeBar(p: Pattern, bar: number): Pattern {
+  return p.map((r) => [...r.slice(0, bar * STEPS), ...r.slice((bar + 1) * STEPS)]);
+}
+
+/** Matches removeBar: notes in that bar are dropped, later ones move up a bar. */
+export function removePianoBar(notes: readonly PianoNote[], bar: number): PianoNote[] {
+  return notes
+    .filter((n) => Math.floor(n.step / STEPS) !== bar)
+    .map((n) => (n.step >= (bar + 1) * STEPS ? { ...n, step: n.step - STEPS } : { ...n }));
+}
+
 export const defaultClick = (): ClickPattern => [row([0]), row([4, 8, 12])];
 export const emptyClick = (): ClickPattern => [row(), row()];
 export const cloneGrid = (g: boolean[][]) => g.map((r) => [...r]);

@@ -6,6 +6,8 @@ import {
   emptyPattern,
   isPatternGrid,
   patternBars,
+  removeBar,
+  removePianoBar,
   resizePattern,
   resizePiano,
   samePiano,
@@ -96,6 +98,26 @@ test('resizing repeats bars when growing and drops them when shrinking', () => {
   const notes = [{ pitch: 60, step: 4, len: 2 }];
   expect(resizePiano(notes, 1, 3).map((n) => n.step)).toEqual([4, 20, 36]);
   expect(resizePiano([...notes, { pitch: 62, step: 20, len: 1 }], 2, 1)).toEqual(notes);
+});
+
+test('removing a bar drops it and moves later bars up', () => {
+  const p = emptyPattern(3);
+  p[0][1] = true; // bar 1
+  p[0][STEPS + 2] = true; // bar 2
+  p[0][2 * STEPS + 3] = true; // bar 3
+  const out = removeBar(p, 1);
+  expect(out[0].length).toBe(2 * STEPS);
+  expect([out[0][1], out[0][STEPS + 2], out[0][STEPS + 3]]).toEqual([true, false, true]);
+
+  const notes = [
+    { pitch: 60, step: 1, len: 1 },
+    { pitch: 61, step: 18, len: 1 },
+    { pitch: 62, step: 35, len: 1 },
+  ];
+  expect(removePianoBar(notes, 1).map((n) => [n.pitch, n.step])).toEqual([
+    [60, 1],
+    [62, 19],
+  ]);
 });
 
 test('piano notes may sit in later bars but not cross a bar line', () => {

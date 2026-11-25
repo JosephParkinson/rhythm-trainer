@@ -224,6 +224,16 @@ input:disabled,
   align-items: center;
 }
 
+/* trainer grid and piano roll share a narrow head column so their steps line up */
+#grid,
+.roll {
+  grid-template-columns: 64px repeat(16, 38px);
+}
+
+.binds {
+  margin-top: 6px;
+}
+
 .rowhead {
   display: flex;
   align-items: center;
@@ -787,8 +797,7 @@ table.data tr.locked {
 
 .roll {
   display: grid;
-  /* columns line up with the drum grid above */
-  grid-template-columns: 140px repeat(16, 34px);
+  /* columns line up with the drum grid above (see #grid) */
   grid-auto-rows: 11px;
   column-gap: 4px;
   row-gap: 1px;
@@ -962,18 +971,21 @@ table.data tr.locked {
   content: '\00a0';
 }
 
-/* ---------- bar squares: length (amber), bar on screen (bright), PLAY's bar (red dot) ---------- */
+/* ---------- bar squares: length (amber), bar on screen (bright), PLAY's bar (beat pulse) ---------- */
 
 .pages {
   display: flex;
   gap: 5px;
-  margin: 0 0 7px 144px;
+}
+
+.pages.push {
+  margin-left: auto;
 }
 
 .barsq {
   position: relative;
-  width: 28px;
-  height: 14px;
+  width: 18px;
+  height: 18px;
   padding: 0;
   background: #2b2217;
   border: 1px solid #000;
@@ -990,16 +1002,13 @@ table.data tr.locked {
   box-shadow: 0 0 6px var(--led);
 }
 
-.barsq.playing::after {
-  content: '';
-  position: absolute;
-  top: 3px;
-  right: 3px;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: #ff3b2e;
-  box-shadow: 0 0 4px #ff3b2e;
+/* PLAY's bar pulses on each beat: dim squares brighten, the bright one dips */
+.barsq.beat {
+  filter: brightness(1.45);
+}
+
+.barsq.cur.beat {
+  filter: brightness(0.72);
 }
 
 .barsq:disabled {

@@ -6,34 +6,37 @@ import { fmtMs } from './format';
 export interface GridEvents {
   /** a cell was clicked; `step` is the pattern step (page × 16 + column) */
   toggle(track: number, step: number): void;
-  bindClick(track: number): void;
   muteClick(track: number): void;
   /** a bar square inside the pattern was clicked: view that bar */
   pageClick(page: number): void;
-  /** a dark square was clicked (extend) or a lit one right-clicked (shorten): new length in bars */
-  lengthClick(bars: number): void;
+  /** a dark square was clicked: extend to that many bars */
+  extend(bars: number): void;
+  /** a lit square was double- or right-clicked: delete that bar */
+  deleteBar(page: number): void;
   /** the page shown changed (by click or by following playback) */
   pageChanged(page: number): void;
 }
 
-const SUBDIVISIONS = ['', 'e', '&', 'a'];
 const FLASH_MS = 90;
 
 /**
  * The step grid shows one bar (page) of the pattern at a time: step LEDs, track
- * rows (label light = mute toggle, binding button), cells with hit markers.
- * Four bar squares above it show the pattern's length (amber) and the bar on
- * screen (bright), mark the bar PLAY is on (red dot), and set the length.
+ * rows (label light = mute toggle), cells with hit markers.
+ * Four bar squares (in the transport row) show the pattern's length (amber) and
+ * the bar on screen (bright), pulse on the beat for the bar PLAY is on, and set the
+ * length: click a dark one to extend, double- or right-click a lit one to delete that bar.
  */
 export class Grid {
   private readonly leds: HTMLElement[] = [];
   private readonly cells: HTMLElement[][] = [];
   private readonly labels: HTMLButtonElement[] = [];
-  private readonly binds: HTMLButtonElement[] = [];
   private readonly flashTimers: number[] = [];
   private readonly squares: HTMLButtonElement[] = [];
   private playingPage = -1;
+  private beat = false;
   private lengthLocked = false;
+  /** the last single click was on a dark square */
+  private clickExtended = false;
   private muted: readonly boolean[] = [];
   private pattern: Pattern = [];
   private page = 0;
@@ -46,10 +49,11 @@ export class Grid {
   ) {
     for (let p = 0; p < MAX_PATTERN_BARS; p++) {
       const sq = el('button', 'barsq', pagesRoot);
-      sq.addEventListener('click', () => this.squareClick(p, false));
+      sq.addEventListener('click', (e) => e.detail <= 1 && this.squareClick(p));
+      sq.addEventListener('dblclick', () => !this.clickExtended && this.deleteBar(p));
       sq.addEventListener('contextmenu', (e) => {
         e.preventDefault();
-        this.squareClick(p, true);
+        this.deleteBar(p);
       });
       this.squares.push(sq);
     }
@@ -65,11 +69,6 @@ export class Grid {
       label.addEventListener('click', () => ev.muteClick(t));
       this.labels.push(label);
 
-      const bind = el('button', 'bind', head);
-      bind.title = 'Click, then press a key or pad';
-      bind.addEventListener('click', () => ev.bindClick(t));
-      this.binds.push(bind);
-
       this.cells.push(
         Array.from({ length: STEPS }, (_, s) => {
           const cell = el('div', Math.floor(s / STEPS_PER_BEAT) % 2 ? 'cell alt' : 'cell', root);
@@ -78,12 +77,6 @@ export class Grid {
         }),
       );
     });
-
-    el('div', '', root);
-    for (let s = 0; s < STEPS; s++) {
-      const sub = s % STEPS_PER_BEAT;
-      el('div', 'beatnum', root).textContent = sub ? SUBDIVISIONS[sub] : String(s / STEPS_PER_BEAT + 1);
-    }
   }
 
   get currentPage() {
@@ -98,10 +91,11 @@ export class Grid {
     else this.renderPage();
   }
 
-  /** The bar PLAY is on (-1: none). Marks its square; the step lights only run while it's the bar on screen. */
-  setPlayingPage(page: number) {
-    if (page === this.playingPage) return;
+  /** The bar PLAY is on (-1: none). Its square pulses while `beat` is true. */
+  setPlayingPage(page: number, beat = false) {
+    if (page === this.playingPage && beat === this.beat) return;
     this.playingPage = page;
+    this.beat = beat;
     this.renderSquares();
   }
 
@@ -165,17 +159,6 @@ export class Grid {
     this.flashTimers[track] = window.setTimeout(() => this.labels[track].classList.remove('flash'), FLASH_MS);
   }
 
-  setBinds(labels: string[], learning: number | null) {
-    this.binds.forEach((b, t) => {
-      b.textContent = learning === t ? '...' : labels[t];
-      b.classList.toggle('listen', learning === t);
-    });
-  }
-
-  setLocked(locked: boolean) {
-    this.binds.forEach((b) => (b.disabled = locked));
-  }
-
   /** Muted rows: light off, cells dimmed, no hits shown. Redraw the bar afterwards to update markers. */
   setMuted(muted: readonly boolean[]) {
     this.muted = [...muted];
@@ -191,12 +174,16 @@ export class Grid {
     this.labels.forEach((b) => (b.disabled = locked));
   }
 
-  private squareClick(p: number, shorten: boolean) {
-    const bars = patternBars(this.pattern);
-    if (shorten) {
-      if (p + 1 < bars && !this.lengthLocked) this.ev.lengthClick(p + 1);
-    } else if (p < bars) this.ev.pageClick(p);
-    else if (!this.lengthLocked) this.ev.lengthClick(p + 1);
+  /** First click of a click or double-click. */
+  private squareClick(p: number) {
+    this.clickExtended = p >= patternBars(this.pattern);
+    if (!this.clickExtended) this.ev.pageClick(p);
+    else if (!this.lengthLocked) this.ev.extend(p + 1);
+  }
+
+  /** Double-click or right-click on a lit square. (A double-click that started on a dark square only extends.) */
+  private deleteBar(p: number) {
+    if (p < patternBars(this.pattern) && patternBars(this.pattern) > 1 && !this.lengthLocked) this.ev.deleteBar(p);
   }
 
   private renderPage() {
@@ -211,10 +198,10 @@ export class Grid {
       const inside = p < bars;
       sq.classList.toggle('in', inside);
       sq.classList.toggle('cur', p === this.page);
-      sq.classList.toggle('playing', p === this.playingPage);
+      sq.classList.toggle('beat', p === this.playingPage && this.beat);
       sq.disabled = !inside && this.lengthLocked;
       sq.title = inside
-        ? `Bar ${p + 1}` + (p + 1 < bars && !this.lengthLocked ? `. Right-click to shorten to ${p + 1} bar${p ? 's' : ''}` : '')
+        ? `Bar ${p + 1}` + (bars > 1 && !this.lengthLocked ? '. Double-click or right-click to delete' : '')
         : `Click to extend to ${p + 1} bars`;
     });
   }
