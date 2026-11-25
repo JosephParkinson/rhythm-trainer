@@ -1,4 +1,4 @@
-import { STEPS, TRACKS, type Pattern } from './settings';
+import { STEPS, STEPS_PER_BEAT, TRACKS, type Pattern } from './settings';
 
 export const GOOD_MS = 20;
 export const OK_MS = 45;
@@ -13,7 +13,7 @@ export interface Hit {
   vel: number;
 }
 
-/** One recorded run: hits snapped to the 16th grid, indexed by cell. */
+/** One recorded run of one pattern: hits snapped to the 16th grid, indexed by cell. */
 export class Take {
   readonly hits: Hit[] = [];
   private readonly cells = new Map<number, Hit[]>();
@@ -27,6 +27,10 @@ export class Take {
 
   get steps() {
     return this.bars * STEPS;
+  }
+
+  get end() {
+    return this.start + this.steps * this.stepDur;
   }
 
   /** Snaps a hit at AudioContext time `t` to the nearest 16th; null if outside the take. */
@@ -69,39 +73,74 @@ export function scoreCell(hits: readonly Hit[], target: boolean): { hit: Hit; gr
   return hits.map((hit) => ({ hit, grade: hit === best ? gradeErr(hit.err) : 'extra' }));
 }
 
-export interface Stats {
-  hit: number;
+/** Raw material for stats; samples from several takes can be summarised together. */
+export interface Sample {
+  /** error of the best hit on each hit target, ms */
+  errs: number[];
   /** target notes */
-  total: number;
+  notes: number;
   extra: number;
-  /** mean absolute error, ms */
-  avg: number;
-  /** mean signed error, ms; positive = late */
-  bias: number;
 }
 
-/** Scores bars [fromBar, toBar) against the pattern. */
-export function stats(take: Take, pattern: Pattern, fromBar: number, toBar: number): Stats {
-  let total = 0;
-  let extra = 0;
+export interface CellFilter {
+  track?: number;
+  /** position in the beat: 0 = on the beat, 1 = e, 2 = &, 3 = a */
+  sub?: number;
+  fromBar?: number;
+  toBar?: number;
+}
+
+export function collect(take: Take, pattern: Pattern, f: CellFilter = {}): Sample {
   const errs: number[] = [];
-  for (let step = fromBar * STEPS; step < toBar * STEPS; step++) {
-    TRACKS.forEach((_, t) => {
+  let notes = 0;
+  let extra = 0;
+  for (let step = (f.fromBar ?? 0) * STEPS; step < (f.toBar ?? take.bars) * STEPS; step++) {
+    if (f.sub !== undefined && step % STEPS_PER_BEAT !== f.sub) continue;
+    for (let t = 0; t < TRACKS.length; t++) {
+      if (f.track !== undefined && t !== f.track) continue;
       const hits = take.at(t, step);
       if (pattern[t][step % STEPS]) {
-        total++;
+        notes++;
         const best = closest(hits);
         if (best) errs.push(best.err);
         extra += Math.max(0, hits.length - 1);
       } else extra += hits.length;
-    });
+    }
   }
+  return { errs, notes, extra };
+}
+
+/** Timing metrics in ms, to 0.1. */
+export interface TimingStats {
+  notes: number;
+  hit: number;
+  extra: number;
+  /** mean absolute error */
+  avg: number;
+  /** mean signed error; positive = late */
+  bias: number;
+  /** standard deviation of signed error: consistency */
+  sd: number;
+  /** 90th percentile of absolute error */
+  p90: number;
+}
+
+export function summarize(samples: Sample[]): TimingStats {
+  const errs = samples.flatMap((s) => s.errs);
+  const n = errs.length;
   const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
+  const abs = errs.map(Math.abs).sort((a, b) => a - b);
+  const bias = mean(errs);
+  const r1 = (x: number) => Math.round(x * 10) / 10;
   return {
-    hit: errs.length,
-    total,
-    extra,
-    avg: Math.round(mean(errs.map(Math.abs))),
-    bias: Math.round(mean(errs)),
+    notes: samples.reduce((a, s) => a + s.notes, 0),
+    hit: n,
+    extra: samples.reduce((a, s) => a + s.extra, 0),
+    avg: r1(mean(abs)),
+    bias: r1(bias),
+    sd: r1(Math.sqrt(mean(errs.map((e) => (e - bias) ** 2)))),
+    p90: r1(n ? abs[Math.ceil(0.9 * n) - 1] : 0),
   };
 }
+
+export const timing = (take: Take, pattern: Pattern, f?: CellFilter) => summarize([collect(take, pattern, f)]);

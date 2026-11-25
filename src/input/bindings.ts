@@ -56,6 +56,7 @@ export class Bindings {
     }
     const tgt = e.target;
     if (tgt instanceof HTMLInputElement && tgt.type !== 'checkbox' && !tgt.disabled) return; // typing in a box
+    if (tgt instanceof HTMLSelectElement || (tgt instanceof Element && tgt.closest('.overlay'))) return;
     const track = this.settings.keys.indexOf(key);
     if (track < 0) return;
     e.preventDefault();

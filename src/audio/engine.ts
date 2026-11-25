@@ -8,13 +8,15 @@ export type Voice = 'kick' | 'snare' | 'hat' | 'openhat';
  * swaps out, so stopping never leaves stray sounds queued.
  */
 export class Engine {
-  readonly ctx = new AudioContext({ latencyHint: 'interactive' });
+  readonly ctx: AudioContext;
   private readonly out: GainNode;
   private scheduled: GainNode;
   private readonly noise: AudioBuffer;
   private openHat: GainNode | null = null;
 
-  constructor() {
+  /** `lowLatency` asks the browser for its smallest output buffer (may crackle on slow machines). */
+  constructor(readonly lowLatency: boolean) {
+    this.ctx = new AudioContext({ latencyHint: lowLatency ? 0 : 'interactive' });
     this.out = new GainNode(this.ctx, { gain: 0.8 });
     this.out.connect(this.ctx.destination);
     this.scheduled = this.makeBus();
@@ -27,6 +29,11 @@ export class Engine {
 
   get now() {
     return this.ctx.currentTime;
+  }
+
+  /** Output delay the browser reports (processing + device), ms. */
+  get outputLatencyMs() {
+    return Math.round((this.ctx.baseLatency + (this.ctx.outputLatency || 0)) * 1000);
   }
 
   /**
@@ -56,6 +63,11 @@ export class Engine {
   /** Pure 1 kHz burst with a hard attack, easy to find in a mic recording. */
   calClick(t: number) {
     this.tone('sine', 1000, t, 0.5, 0.03, this.scheduled);
+  }
+
+  /** 1 kHz test tone, now (lag test). */
+  beep() {
+    this.tone('sine', 1000, this.ctx.currentTime, 0.5, 0.03, this.out);
   }
 
   /** Plays a voice now. `vel` is 0–1. */

@@ -1,21 +1,26 @@
-import { Scheduler } from '../audio/scheduler';
-import { STEPS, STEPS_PER_BEAT, TRACKS } from '../settings';
+import { Scheduler, playClickStep, playPatternStep } from '../audio/scheduler';
+import { stepDurFor } from '../plan';
+import { STEPS, type ClickPattern, type Pattern } from '../settings';
 import type { Deps, Session } from './session';
 
-/** Loops the pattern until stopped. Reads the pattern live, so edits are heard on the next pass. */
+/** Loops a pattern until stopped. Reads the pattern live, so edits are heard on the next pass. */
 export class PreviewSession implements Session {
   readonly mode = 'preview';
   private readonly sched: Scheduler;
 
-  constructor(private readonly d: Deps) {
-    const { eng, settings } = d;
-    const stepDur = 60 / settings.bpm / STEPS_PER_BEAT;
-    this.sched = new Scheduler(eng, eng.now + 0.1, stepDur, 0, Infinity, (step, t) => {
-      const s = step % STEPS;
-      TRACKS.forEach((track, i) => settings.pattern[i][s] && eng.schedule(track.voice, t));
-      if (settings.metronome && s % STEPS_PER_BEAT === 0) eng.click(t, s === 0);
+  constructor(
+    private readonly d: Deps,
+    pattern: Pattern,
+    bpm: number,
+    click: ClickPattern,
+  ) {
+    const { eng } = d;
+    this.sched = new Scheduler(eng, eng.now + 0.1, stepDurFor(bpm), 0, Infinity, (step, t) => {
+      playPatternStep(eng, pattern, step % STEPS, t);
+      playClickStep(eng, click, step % STEPS, t);
     });
-    d.controls.lcd('PREVIEW', `${settings.bpm} BPM`);
+    d.grid.setPattern(pattern);
+    d.controls.lcd('PREVIEW', `${bpm} BPM`);
   }
 
   frame() {
@@ -25,5 +30,6 @@ export class PreviewSession implements Session {
 
   stop() {
     this.sched.stop();
+    this.d.eng.cancelScheduled();
   }
 }

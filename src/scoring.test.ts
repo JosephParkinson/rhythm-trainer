@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { Take, scoreCell, stats } from './scoring';
+import { Take, collect, scoreCell, summarize, timing } from './scoring';
 import { STEPS, emptyPattern } from './settings';
 
 const STEP = 0.1; // s per 16th
@@ -49,18 +49,37 @@ describe('scoreCell', () => {
   });
 });
 
-describe('stats', () => {
-  test('counts hits, misses and extras, and averages the best hit per target', () => {
-    const pattern = emptyPattern();
-    pattern[0][0] = pattern[0][8] = pattern[1][4] = true; // 3 targets per bar
-    const take = new Take(0, STEP, 2);
-    take.record(0, 0.01, 1); // +10ms
-    take.record(0, -0.03, 1); // extra in the same cell
-    take.record(1, 4 * STEP - 0.02, 1); // -20ms
-    take.record(1, 5 * STEP, 1); // off-pattern extra
-    take.record(0, (STEPS + 8) * STEP + 0.04, 1); // bar 2: +40ms
+describe('timing stats', () => {
+  const pattern = emptyPattern();
+  pattern[0][0] = pattern[0][8] = pattern[1][4] = true; // 3 targets per bar
+  const take = new Take(0, STEP, 2);
+  take.record(0, 0.01, 1); // +10ms
+  take.record(0, -0.03, 1); // extra in the same cell
+  take.record(1, 4 * STEP - 0.02, 1); // -20ms
+  take.record(1, 5 * STEP, 1); // off-pattern extra
+  take.record(0, (STEPS + 8) * STEP + 0.04, 1); // bar 2: +40ms
 
-    expect(stats(take, pattern, 0, 1)).toEqual({ hit: 2, total: 3, extra: 2, avg: 15, bias: -5 });
-    expect(stats(take, pattern, 0, 2)).toEqual({ hit: 3, total: 6, extra: 2, avg: 23, bias: 10 });
+  test('per bar and overall', () => {
+    expect(timing(take, pattern, { fromBar: 0, toBar: 1 })).toEqual({
+      notes: 3, hit: 2, extra: 2, avg: 15, bias: -5, sd: 15, p90: 20,
+    });
+    expect(timing(take, pattern)).toMatchObject({ notes: 6, hit: 3, extra: 2, avg: 23.3, bias: 10, p90: 40 });
+  });
+
+  test('filters by track and beat position', () => {
+    expect(timing(take, pattern, { track: 1 })).toMatchObject({ notes: 2, hit: 1, extra: 1, bias: -20 });
+    // position 0 (on the beat) holds steps 0, 4, 8, 12 of each bar
+    expect(timing(take, pattern, { sub: 0 })).toMatchObject({ notes: 6, hit: 3 });
+    expect(timing(take, pattern, { sub: 1 })).toMatchObject({ notes: 0, hit: 0, extra: 1 });
+  });
+
+  test('summarize merges samples from several takes', () => {
+    const a = collect(take, pattern, { fromBar: 0, toBar: 1 });
+    const b = collect(take, pattern, { fromBar: 1, toBar: 2 });
+    expect(summarize([a, b])).toEqual(timing(take, pattern));
+  });
+
+  test('empty sample is all zero', () => {
+    expect(summarize([])).toEqual({ notes: 0, hit: 0, extra: 0, avg: 0, bias: 0, sd: 0, p90: 0 });
   });
 });

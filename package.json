@@ -6,11 +6,69 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "app": "npm run build && electron .",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:linux": "npm run build && electron-builder --linux",
+    "dist:win-portable": "npm run build && electron-builder --win portable",
+    "serve": "npm run build && vite preview --port 5173 --strictPort"
   },
   "devDependencies": {
+    "electron": "^45.5.0",
+    "electron-builder": "^26.18.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.8",
     "vitest": "^5.1.2"
+  },
+  "productName": "Rhythm Trainer",
+  "version": "0.1.0",
+  "description": "Finger drumming rhythm trainer",
+  "main": "electron/main.cjs",
+  "build": {
+    "appId": "com.rhythmtrainer.app",
+    "productName": "Rhythm Trainer",
+    "files": [
+      "dist/**",
+      "electron/**",
+      "package.json"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "mac": {
+      "target": {
+        "target": "dmg",
+        "arch": [
+          "arm64",
+          "x64"
+        ]
+      },
+      "category": "public.app-category.music",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "The microphone is used only to calibrate latency."
+      }
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Audio"
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-portable.${ext}"
+    },
+    "dmg": {
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    }
   }
 }

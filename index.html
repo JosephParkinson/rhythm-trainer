@@ -4,7 +4,10 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Rhythm Trainer</title>
-    <link rel="icon" href="data:," />
+    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <meta name="theme-color" content="#2c2e32" />
   </head>
   <body>
     <div class="rack">
@@ -13,37 +16,70 @@
         <div class="lcd"><div id="lcd1"></div><div id="lcd2"></div></div>
       </div>
 
-      <div class="panel controls">
-        <label>BPM <input id="bpm" type="number" /></label>
-        <label>COUNT-IN <input id="countIn" type="number" /></label>
-        <label>BARS <input id="bars" type="number" /></label>
-        <label title="Subtracted from every hit">LATENCY <input id="latency" type="number" /> MS</label>
-        <label class="check"><input id="metronome" type="checkbox" /> METRONOME</label>
-        <label class="check"><input id="sounds" type="checkbox" /> SOUNDS</label>
-        <span id="midi" class="midiled">MIDI</span>
-      </div>
-
-      <div class="panel transport">
-        <button id="play" class="btn play">PLAY</button>
-        <button id="preview" class="btn">PREVIEW</button>
-        <button id="clear" class="btn">CLEAR</button>
-        <button id="cal" class="btn">CALIBRATE</button>
-        <span class="nav">
-          <button id="replay" class="btn">REPLAY</button>
-          <button id="prev" class="btn small" title="Previous bar">&#9668;</button>
-          <button id="next" class="btn small" title="Next bar">&#9658;</button>
+      <div class="tabs">
+        <button id="tab-trainer" class="btn tab">TRAINER</button>
+        <button id="tab-practice" class="btn tab">PRACTICE</button>
+        <span class="push tabright">
+          <button id="install" class="btn small" hidden>INSTALL</button>
+          <label class="check" title="Smallest audio buffer. Untick if you hear crackles."><input id="lowLatency" type="checkbox" /> LOW LATENCY</label>
+          <span id="outlat" class="outlat" title="Audio output delay reported by the browser">OUT --</span>
+          <span id="midi" class="midiled">MIDI</span>
         </span>
       </div>
 
-      <div class="panel gridwrap">
-        <div id="grid" class="grid"></div>
-        <div class="legend">
-          <span><i class="mk good"></i>&le;20MS</span>
-          <span><i class="mk ok"></i>&le;45MS</span>
-          <span><i class="mk bad"></i>&gt;45MS</span>
-          <span><i class="mk extra"></i>EXTRA</span>
-          <span><i class="missbox"></i>MISSED</span>
+      <div id="view-trainer">
+        <div class="panel source">
+          <span id="srcKind" class="srckind"></span>
+          <span id="srcName" class="srcname"></span>
+          <button id="new" class="btn small">NEW</button>
+          <button id="save" class="btn small">SAVE</button>
+          <button id="exit" class="btn small">EXIT</button>
         </div>
+
+        <div class="panel controls">
+          <label>BPM <input id="bpm" type="number" /></label>
+          <label>COUNT-IN <input id="countIn" type="number" /></label>
+          <label>BARS <input id="bars" type="number" /></label>
+          <label title="Subtracted from every hit">LATENCY <input id="latency" type="number" /> MS</label>
+          <label class="check"><input id="metronome" type="checkbox" /> METRONOME</label>
+          <label class="check" title="One bar of the pattern before the count-in"><input id="hearFirst" type="checkbox" /> HEAR FIRST</label>
+          <label class="check"><input id="sounds" type="checkbox" /> SOUNDS</label>
+        </div>
+
+        <div class="panel transport">
+          <button id="play" class="btn play">PLAY</button>
+          <button id="preview" class="btn">PREVIEW</button>
+          <button id="clear" class="btn">CLEAR</button>
+          <button id="cal" class="btn">CALIBRATE</button>
+          <button id="lag" class="btn" title="Measure the delay from hitting a pad or key to hearing the sound">LAG TEST</button>
+          <span class="nav">
+            <button id="replay" class="btn">REPLAY</button>
+            <button id="prev" class="btn small" title="Previous bar">&#9668;</button>
+            <button id="next" class="btn small" title="Next bar">&#9658;</button>
+          </span>
+        </div>
+
+        <div class="panel gridwrap">
+          <div id="grid" class="grid"></div>
+          <div class="legend">
+            <span><i class="mk good"></i>&le;20MS</span>
+            <span><i class="mk ok"></i>&le;45MS</span>
+            <span><i class="mk bad"></i>&gt;45MS</span>
+            <span><i class="mk extra"></i>EXTRA</span>
+            <span><i class="missbox"></i>MISSED</span>
+          </div>
+        </div>
+
+        <div id="breakdown" class="panel breakdown" hidden></div>
+      </div>
+
+      <div id="view-practice" hidden>
+        <div class="tabs sub">
+          <button id="tab-patterns" class="btn tab small">PATTERNS</button>
+          <button id="tab-routines" class="btn tab small">ROUTINES</button>
+        </div>
+        <div id="patterns"></div>
+        <div id="routines" hidden></div>
       </div>
     </div>
     <script type="module" src="/src/main.ts"></script>

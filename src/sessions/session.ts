@@ -19,8 +19,16 @@ export interface Deps {
  */
 export interface Session {
   readonly mode: ActiveMode;
+  /** Hits make no drum sound (mic tests need to hear only the pad/key). */
+  readonly mutesHits?: boolean;
   frame?(): void;
   hit?(track: number, perfMs: number, vel: number): void;
   /** Release timers and cancel scheduled audio. */
   stop(): void;
+}
+
+/** LCD text for a failed mic test. */
+export function errorText(e: unknown) {
+  if (e instanceof DOMException && e.name === 'NotAllowedError') return 'MIC ACCESS DENIED';
+  return e instanceof Error ? e.message.toUpperCase() : 'ERROR';
 }

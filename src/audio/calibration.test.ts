@@ -1,5 +1,6 @@
 import { expect, test } from 'vitest';
-import { analyseCalibration, tapsByClick, type Recording } from './calibration';
+import type { Recording } from './analysis';
+import { analyseCalibration, tapsByClick } from './calibration';
 
 const SR = 48000;
 const BEAT = 60 / 90;

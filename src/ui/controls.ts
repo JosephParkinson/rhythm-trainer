@@ -1,8 +1,11 @@
 import { NUMBER_LIMITS, clampSetting, type NumberSetting, type Settings } from '../settings';
 import { $ } from './dom';
 
-export type Mode = 'idle' | 'play' | 'preview' | 'replay' | 'cal';
-type CheckSetting = 'metronome' | 'sounds';
+export type Mode = 'idle' | 'play' | 'preview' | 'replay' | 'cal' | 'lag';
+type CheckSetting = 'metronome' | 'sounds' | 'hearFirst' | 'lowLatency';
+
+/** Settings a routine overrides with its own per-pattern values. */
+const PER_PATTERN = new Set(['bpm', 'bars', 'metronome']);
 export type ActiveMode = Exclude<Mode, 'idle'>;
 
 /** Each active mode has a button with this id that starts and stops it. */
@@ -11,7 +14,11 @@ const LABELS: Record<ActiveMode, string> = {
   preview: 'PREVIEW',
   replay: 'REPLAY',
   cal: 'CALIBRATE',
+  lag: 'LAG TEST',
 };
+
+/** Modes whose button reads CANCEL rather than STOP while running. */
+const CANCELLABLE = new Set<ActiveMode>(['cal', 'lag']);
 
 export interface ControlEvents {
   toggle(mode: ActiveMode): void;
@@ -23,9 +30,11 @@ export interface ControlEvents {
 
 export interface ControlState {
   mode: Mode;
-  /** bars in the reviewable take; 0 if none */
+  /** bars in the reviewable result; 0 if none */
   bars: number;
   reviewBar: number;
+  /** a routine is loaded */
+  routine: boolean;
 }
 
 /** LCD, transport buttons, settings inputs and MIDI indicator. */
@@ -33,6 +42,7 @@ export class Controls {
   private readonly lcd1 = $('lcd1');
   private readonly lcd2 = $('lcd2');
   private readonly midi = $('midi');
+  private readonly outLat = $('outlat');
   private readonly clearBtn = $<HTMLButtonElement>('clear');
   private readonly prevBtn = $<HTMLButtonElement>('prev');
   private readonly nextBtn = $<HTMLButtonElement>('next');
@@ -41,6 +51,8 @@ export class Controls {
   private readonly checks: Record<CheckSetting, HTMLInputElement> = {
     metronome: $<HTMLInputElement>('metronome'),
     sounds: $<HTMLInputElement>('sounds'),
+    hearFirst: $<HTMLInputElement>('hearFirst'),
+    lowLatency: $<HTMLInputElement>('lowLatency'),
   };
 
   constructor(
@@ -86,22 +98,30 @@ export class Controls {
     if (this.lcd2.textContent !== line2) this.lcd2.textContent = line2;
   }
 
+  /** Output delay readout; null until audio has started. */
+  setOutputLatency(ms: number | null) {
+    const text = ms === null ? 'OUT --' : `OUT ${ms}MS`;
+    if (this.outLat.textContent !== text) this.outLat.textContent = text;
+  }
+
   /** null = MIDI unavailable in this browser. */
   setMidi(devices: string[] | null) {
     this.midi.classList.toggle('on', !!devices?.length);
     this.midi.title = devices === null ? 'MIDI unavailable in this browser' : devices.join('\n') || 'No MIDI devices';
   }
 
-  update({ mode, bars, reviewBar }: ControlState) {
+  update({ mode, bars, reviewBar, routine }: ControlState) {
     const busy = mode !== 'idle';
     for (const [m, b] of Object.entries(this.buttons) as [ActiveMode, HTMLButtonElement][]) {
       const active = mode === m;
-      b.textContent = active ? (m === 'cal' ? 'CANCEL' : 'STOP') : LABELS[m];
+      b.textContent = active ? (CANCELLABLE.has(m) ? 'CANCEL' : 'STOP') : LABELS[m];
       b.classList.toggle('lit', active);
       b.disabled = busy ? !active : m === 'replay' && bars === 0;
     }
-    this.clearBtn.disabled = busy;
-    for (const inp of [...Object.values(this.numbers), ...Object.values(this.checks)]) inp.disabled = busy;
+    this.clearBtn.disabled = busy || routine;
+    for (const [id, inp] of [...Object.entries(this.numbers), ...Object.entries(this.checks)]) {
+      inp.disabled = busy || (routine && PER_PATTERN.has(id));
+    }
     this.prevBtn.disabled = busy || bars === 0 || reviewBar === 0;
     this.nextBtn.disabled = busy || bars === 0 || reviewBar >= bars - 1;
   }

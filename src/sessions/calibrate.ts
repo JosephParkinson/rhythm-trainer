@@ -1,9 +1,10 @@
 import { CAL_TAPS, Calibration } from '../audio/calibration';
-import type { Deps, Session } from './session';
+import { errorText, type Deps, type Session } from './session';
 
 /** Runs mic calibration and reports the measured latency. Hits are silent and go to the calibrator. */
 export class CalibrateSession implements Session {
   readonly mode = 'cal';
+  readonly mutesHits = true;
   private readonly cal: Calibration;
   private cancelled = false;
 
@@ -35,7 +36,3 @@ export class CalibrateSession implements Session {
   }
 }
 
-function errorText(e: unknown) {
-  if (e instanceof DOMException && e.name === 'NotAllowedError') return 'MIC ACCESS DENIED';
-  return e instanceof Error ? e.message.toUpperCase() : 'ERROR';
-}
