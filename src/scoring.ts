@@ -1,4 +1,4 @@
-import { STEPS, STEPS_PER_BEAT, TRACKS, type Pattern } from './settings';
+import { STEPS, STEPS_PER_BEAT, TRACKS, patternSteps, type Pattern } from './settings';
 
 export const GOOD_MS = 20;
 export const OK_MS = 45;
@@ -96,12 +96,13 @@ export function collect(take: Take, pattern: Pattern, f: CellFilter = {}): Sampl
   const errs: number[] = [];
   let notes = 0;
   let extra = 0;
+  const len = patternSteps(pattern); // the pattern loops over the take
   for (let step = (f.fromBar ?? 0) * STEPS; step < (f.toBar ?? take.bars) * STEPS; step++) {
     if (f.sub !== undefined && step % STEPS_PER_BEAT !== f.sub) continue;
     for (let t = 0; t < TRACKS.length; t++) {
       if ((f.track !== undefined && t !== f.track) || f.muted?.[t]) continue;
       const hits = take.at(t, step);
-      if (pattern[t][step % STEPS]) {
+      if (pattern[t][step % len]) {
         notes++;
         const best = closest(hits);
         if (best) errs.push(best.err);

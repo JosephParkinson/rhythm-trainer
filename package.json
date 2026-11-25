@@ -9,10 +9,11 @@
     "test": "vitest run",
     "app": "npm run build && electron .",
     "dist:win": "npm run build && electron-builder --win",
-    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:mac": "npm run build && electron-builder --mac -c.extraMetadata.repoPath=\"$PWD\"",
     "dist:linux": "npm run build && electron-builder --linux",
     "dist:win-portable": "npm run build && electron-builder --win portable",
-    "serve": "npm run build && vite preview --port 5173 --strictPort"
+    "serve": "npm run build && vite preview --port 5173 --strictPort",
+    "update:mac": "bash scripts/update-mac.sh"
   },
   "devDependencies": {
     "electron": "^45.5.0",

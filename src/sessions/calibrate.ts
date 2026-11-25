@@ -11,17 +11,17 @@ export class CalibrateSession implements Session {
   constructor(d: Deps, onLatency: (ms: number) => void) {
     const { controls } = d;
     this.cal = new Calibration(d.eng);
-    controls.lcd('MIC...');
+    controls.testStatus('MIC...');
     this.cal
       .run((listening, taps) =>
-        controls.lcd(listening ? 'LISTEN...' : `TAP BETWEEN CLICKS  ${taps}/${CAL_TAPS}`, 'SPEAKERS ON, NO HEADPHONES'),
+        controls.testStatus(listening ? 'LISTEN...' : `TAP BETWEEN CLICKS  ${taps}/${CAL_TAPS}`, 'SPEAKERS ON, NO HEADPHONES'),
       )
       .then(
         (r) => {
           onLatency(r.latency);
-          controls.lcd(`LATENCY SET TO ${d.settings.latency}MS`, `JITTER ±${r.jitter}MS  (${r.used} TAPS)`);
+          controls.testStatus(`LATENCY SET TO ${d.settings.latency}MS`, `JITTER ±${r.jitter}MS  (${r.used} TAPS)`);
         },
-        (e) => this.cancelled || controls.lcd('CALIBRATION FAILED', errorText(e)),
+        (e) => this.cancelled || controls.testStatus('CALIBRATION FAILED', errorText(e)),
       )
       .finally(() => d.finish(this));
   }

@@ -89,3 +89,14 @@ describe('timing stats', () => {
     expect(summarize([])).toEqual({ notes: 0, hit: 0, extra: 0, avg: 0, bias: 0, sd: 0, p90: 0 });
   });
 });
+
+test('a 2-bar pattern loops over a 4-bar take', () => {
+  const pattern = emptyPattern(2);
+  pattern[0][0] = true; // kick on bar 1 only
+  pattern[1][STEPS + 4] = true; // snare on bar 2 only
+  const take = new Take(0, STEP, 4);
+  take.record(0, 2 * STEPS * STEP, 1); // bar 3 = pattern bar 1: kick is a target
+  take.record(1, (3 * STEPS + 4) * STEP, 1); // bar 4 = pattern bar 2: snare is a target
+  take.record(1, 4 * STEP, 1); // bar 1 has no snare: extra
+  expect(timing(take, pattern)).toMatchObject({ notes: 4, hit: 2, extra: 1 });
+});

@@ -21,6 +21,8 @@ export class Bindings {
     /** bindings or learn state changed */
     private readonly onChange: () => void,
     private readonly onPiano: PianoHandler,
+    /** space bar, when it isn't bound to a drum: play/pause */
+    private readonly onSpace: () => void,
   ) {
     window.addEventListener('keydown', (e) => this.onKey(e));
     // Clicking anywhere except a binding button cancels learn.
@@ -62,6 +64,10 @@ export class Bindings {
     const tgt = e.target;
     if (tgt instanceof HTMLInputElement && tgt.type !== 'checkbox' && !tgt.disabled) return; // typing in a box
     if (tgt instanceof HTMLSelectElement || (tgt instanceof Element && tgt.closest('.overlay'))) return;
+    if (key === ' ' && !this.settings.keys.includes(' ')) {
+      e.preventDefault();
+      return this.onSpace();
+    }
     const track = this.settings.keys.indexOf(key);
     if (track < 0) return;
     e.preventDefault();

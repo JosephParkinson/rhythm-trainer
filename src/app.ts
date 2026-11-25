@@ -1,12 +1,12 @@
 import { Engine } from './audio/engine';
 import { History } from './history';
 import { Bindings } from './input/bindings';
-import { Library } from './library';
+import type { NoteEvent } from './input/midi';
+import { Library, type SavedPattern } from './library';
 import { barRefs, editorPlan, routinePlan, type RunResult } from './plan';
-import { timing } from './scoring';
 import { CalibrateSession } from './sessions/calibrate';
 import { LagSession } from './sessions/lag';
-import { PreviewSession } from './sessions/preview';
+import { PlaySession } from './sessions/play';
 import { ReplaySession } from './sessions/replay';
 import { RunSession } from './sessions/run';
 import type { Deps, Session } from './sessions/session';
@@ -20,26 +20,27 @@ import {
   emptyClick,
   emptyPattern,
   loadSettings,
+  patternBars,
+  resizePattern,
+  resizePiano,
   sameGrid,
   samePiano,
   saveSettings,
   type PianoNote,
 } from './settings';
-import type { SavedPattern } from './library';
-import type { NoteEvent } from './input/midi';
 import { Breakdown } from './ui/breakdown';
 import { Controls, type ActiveMode, type Mode } from './ui/controls';
 import { confirmBox, promptText } from './ui/dialog';
 import { $ } from './ui/dom';
-import { formatStats } from './ui/format';
 import { Grid } from './ui/grid';
-import { PianoRoll } from './ui/piano-roll';
 import { PatternsView } from './ui/patterns-view';
+import { PianoRoll } from './ui/piano-roll';
 import { RoutinesView } from './ui/routines-view';
 
 type View = 'trainer' | 'patterns' | 'routines';
 const PRACTICE_VIEWS = ['patterns', 'routines'] as const;
 const TABS = ['tab-trainer', 'tab-practice', 'tab-patterns', 'tab-routines'];
+const MAX_NAME = 16;
 
 /**
  * Top-level controller. Owns settings, the library and history, what the
@@ -64,30 +65,27 @@ export class App {
   private result: RunResult | null = null;
   /** global bar index into the result */
   private reviewBar = 0;
+  /** pattern step PLAY resumes from after a pause */
+  private playFrom = 0;
   /** last PRACTICE sub-tab */
   private practiceView: (typeof PRACTICE_VIEWS)[number] = 'patterns';
 
   constructor() {
-    this.grid = new Grid($('grid'), {
+    this.grid = new Grid($('grid'), $('pages'), {
       toggle: (t, s) => this.editPattern(() => (this.settings.pattern[t][s] = !this.settings.pattern[t][s])),
       bindClick: (t) => this.bindings.learn(this.bindings.learning === t ? null : t),
       muteClick: (t) => this.toggleMute(t),
+      pageClick: (p) => this.pageClick(p),
+      pageChanged: (p) => this.roll.setPage(p),
     });
     this.roll = new PianoRoll($('roll'), {
       change: (notes) => this.editPiano(notes),
       audition: (pitch) => !this.session?.mutesHits && this.eng.pianoAudition(pitch),
     });
-    $('pianoMute').addEventListener('click', () => this.togglePianoMute());
-    $('pianoClear').addEventListener('click', () => this.editPiano([]));
-    $('pianoToggle').addEventListener('click', () => {
-      this.settings.pianoOpen = !this.settings.pianoOpen;
-      this.save();
-      this.renderPianoPanel();
-    });
     this.controls = new Controls(this.settings, {
       toggle: (m) => (this.session?.mode === m ? this.end(this.session, false) : void this.start(m)),
-      clear: () => this.editPattern(() => this.settings.pattern.forEach((row) => row.fill(false))),
       nav: (d) => this.showReview(this.reviewBar + d),
+      length: (bars) => this.setLength(bars),
       change: () => {
         this.save();
         // A new buffer size needs a new AudioContext; it's created on next use.
@@ -96,7 +94,6 @@ export class App {
           this.engine = null;
           this.controls.setOutputLatency(null);
         }
-        if (!this.result && !this.session) this.showIdle();
       },
     });
     this.bindings = new Bindings(
@@ -107,6 +104,7 @@ export class App {
         this.grid.setBinds(this.bindings.labels(), this.bindings.learning);
       },
       (e) => this.pianoNote(e),
+      () => this.playPause(),
     );
     const startMidi = () => this.bindings.startMidi((names) => this.controls.setMidi(names));
     startMidi();
@@ -117,8 +115,17 @@ export class App {
     });
 
     $('new').addEventListener('click', () => this.newPattern());
+    $('load').addEventListener('click', () => this.setView('patterns'));
     $('save').addEventListener('click', () => void this.savePattern());
     $('exit').addEventListener('click', () => this.loadRoutine(null));
+    $('cog').addEventListener('click', () => this.toggleSettings());
+    $('pianoLed').addEventListener('click', () => this.togglePianoMute());
+    $('pianoClear').addEventListener('click', () => this.editPiano([]));
+    $('pianoToggle').addEventListener('click', () => {
+      this.settings.pianoOpen = !this.settings.pianoOpen;
+      this.save();
+      this.renderPianoPanel();
+    });
     $('tab-trainer').addEventListener('click', () => this.setView('trainer'));
     $('tab-practice').addEventListener('click', () => this.setView(this.practiceView));
     for (const v of PRACTICE_VIEWS) $(`tab-${v}`).addEventListener('click', () => this.setView(v));
@@ -167,10 +174,10 @@ export class App {
     };
 
     switch (mode) {
-      case 'play': {
+      case 'test': {
         const r = this.routine;
         const plan = r ? routinePlan(r, this.library, this.settings) : editorPlan(this.settings, this.patternName());
-        if (!plan.segments.length) return this.controls.lcd('ROUTINE EMPTY');
+        if (!plan.segments.length) return this.controls.status('ROUTINE EMPTY');
         this.setResult(null);
         this.grid.clear();
         const s = new RunSession(d, plan);
@@ -183,7 +190,7 @@ export class App {
           this.showIdle();
         });
       }
-      case 'preview': {
+      case 'play': {
         const s = this.settings;
         let p = { pattern: s.pattern, piano: s.piano, bpm: s.bpm, click: s.metronome ? defaultClick() : emptyClick() };
         const r = this.routine;
@@ -194,7 +201,12 @@ export class App {
           if (!seg) return;
           p = seg;
         }
-        return this.run(new PreviewSession(d, p.pattern, p.piano, p.bpm, p.click), () => this.showIdle());
+        this.grid.clear();
+        const session = new PlaySession(d, p.pattern, p.piano, p.bpm, p.click, this.playFrom);
+        return this.run(session, () => {
+          this.playFrom = session.position;
+          this.showIdle();
+        });
       }
       case 'replay': {
         // From the bar on screen to the end of its pattern.
@@ -206,17 +218,18 @@ export class App {
         return this.run(s, () => this.showReview(from));
       }
       case 'cal': {
-        this.setResult(null);
-        this.grid.clear();
         const s = new CalibrateSession(d, (ms) => this.setLatency(ms));
-        return this.run(s, (done) => this.micTestEnded(done, 'CALIBRATION CANCELLED'));
+        return this.run(s, (done) => done || this.controls.testStatus('CALIBRATION CANCELLED'));
       }
-      case 'lag': {
-        this.setResult(null);
-        this.grid.clear();
-        return this.run(new LagSession(d), (done) => this.micTestEnded(done, 'LAG TEST CANCELLED'));
-      }
+      case 'lag':
+        return this.run(new LagSession(d), (done) => done || this.controls.testStatus('LAG TEST CANCELLED'));
     }
+  }
+
+  /** Space bar: PLAY / PAUSE. */
+  private playPause() {
+    if (this.session?.mode === 'play') this.end(this.session, false);
+    else if (!this.session) void this.start('play');
   }
 
   /** Replays one pattern of the result from its first bar, switching from any replay in progress. */
@@ -232,13 +245,6 @@ export class App {
   private segmentBars(seg: number) {
     const refs = this.result ? barRefs(this.result) : [];
     return { from: refs.findIndex((r) => r.seg === seg), to: refs.findLastIndex((r) => r.seg === seg) + 1 };
-  }
-
-  /** A finished mic test leaves its result on the LCD; a cancelled one says so. */
-  private micTestEnded(done: boolean, cancelled: string) {
-    if (done) return;
-    this.showIdle();
-    this.controls.lcd(cancelled);
   }
 
   private run(s: Session, onEnd: (completed: boolean) => void) {
@@ -265,7 +271,7 @@ export class App {
 
   private hit(track: number, perfMs: number, vel: number) {
     const s = this.session;
-    // Calibration needs silence so the mic only hears the key.
+    // Mic tests need silence so the mic only hears the key.
     if (!s?.mutesHits && this.settings.sounds) this.eng.trigger(TRACKS[track].voice, vel);
     this.grid.flash(track);
     s?.hit?.(track, perfMs, vel);
@@ -309,6 +315,7 @@ export class App {
     this.settings.bpm = p.bpm;
     this.settings.patternId = p.id;
     this.routineId = null;
+    this.playFrom = 0;
     this.controls.syncInputs();
     this.save();
     this.setResult(null);
@@ -319,6 +326,7 @@ export class App {
   private loadRoutine(id: string | null) {
     if (this.session) return;
     this.routineId = id;
+    this.playFrom = 0;
     this.setResult(null);
     this.setView('trainer');
     this.showIdle();
@@ -329,6 +337,7 @@ export class App {
     this.settings.pattern = emptyPattern();
     this.settings.piano = [];
     this.settings.patternId = null;
+    this.playFrom = 0;
     this.save();
     this.setResult(null);
     this.showIdle();
@@ -365,11 +374,15 @@ export class App {
     else this.renderSource();
   }
 
-  // ---------- state ----------
+  // ---------- editing ----------
 
-  /** The editor pattern is editable while idle or previewing, unless a routine is loaded. */
+  /** Edits are allowed while idle or playing (heard on the next pass), unless a routine is loaded. */
+  private get editable() {
+    return !this.routineId && (this.mode === 'idle' || this.mode === 'play');
+  }
+
   private editPattern(edit: () => void) {
-    if (this.routineId || (this.mode !== 'idle' && this.mode !== 'preview')) return;
+    if (!this.editable) return;
     edit();
     this.grid.setPattern(this.settings.pattern);
     this.save();
@@ -380,35 +393,38 @@ export class App {
     }
   }
 
-  /**
-   * Same rules as drum edits. The array is updated in place so a running
-   * preview (which holds a reference) hears the change on its next pass.
-   */
+  /** The array is updated in place so a playing pattern (which holds a reference) hears the change. */
   private editPiano(notes: PianoNote[]) {
-    if (this.routineId || (this.mode !== 'idle' && this.mode !== 'preview')) return this.roll.setNotes(this.settings.piano);
+    if (!this.editable) return this.roll.setNotes(this.settings.piano);
     this.settings.piano.splice(0, this.settings.piano.length, ...notes);
     this.roll.setNotes(this.settings.piano);
     this.save();
     this.renderSource();
   }
 
-  private togglePianoMute() {
-    if (this.mode !== 'idle' && this.mode !== 'preview') return;
-    this.settings.pianoMuted = !this.settings.pianoMuted;
+  /** LENGTH: grows by repeating the existing bars, shrinks by dropping the end. */
+  private setLength(bars: number) {
+    const from = patternBars(this.settings.pattern);
+    if (this.mode !== 'idle' || this.routineId || bars === from) return this.controls.setLength(from);
+    this.settings.pattern = resizePattern(this.settings.pattern, bars);
+    this.settings.piano = resizePiano(this.settings.piano, from, bars);
+    this.playFrom = 0;
     this.save();
-    this.renderPianoPanel();
+    this.setResult(null); // the review no longer matches the pattern
+    this.showIdle();
   }
 
-  private renderPianoPanel() {
-    $('roll').hidden = !this.settings.pianoOpen;
-    $('pianoToggle').textContent = this.settings.pianoOpen ? 'HIDE' : 'SHOW';
-    $('pianoMute').classList.toggle('lit', this.settings.pianoMuted);
-    $('roll').classList.toggle('muted', this.settings.pianoMuted);
+  private pageClick(page: number) {
+    if (this.result && this.mode === 'idle') {
+      // In review, jump to that bar of the pattern within the current pass.
+      const bars = patternBars(this.result.plan.segments[barRefs(this.result)[this.reviewBar].seg].pattern);
+      this.showReview(this.reviewBar - (this.reviewBar % bars) + page);
+    } else this.grid.setPage(page);
   }
 
-  /** Muting is allowed while idle (re-scores the review) or previewing (heard on the next step). */
+  /** Muting is allowed while idle (re-scores the review) or playing (heard on the next step). */
   private toggleMute(t: number) {
-    if (this.mode !== 'idle' && this.mode !== 'preview') return;
+    if (this.mode !== 'idle' && this.mode !== 'play') return;
     this.settings.muted[t] = !this.settings.muted[t];
     this.grid.setMuted(this.settings.muted);
     this.save();
@@ -416,6 +432,13 @@ export class App {
       this.breakdown.render(this.result, this.settings.muted);
       this.showReview();
     }
+  }
+
+  private togglePianoMute() {
+    if (this.mode !== 'idle' && this.mode !== 'play') return;
+    this.settings.pianoMuted = !this.settings.pianoMuted;
+    this.save();
+    this.renderPianoPanel();
   }
 
   private setLatency(ms: number) {
@@ -447,6 +470,21 @@ export class App {
     }
   }
 
+  private toggleSettings() {
+    const panel = $('settingsPanel');
+    panel.hidden = !panel.hidden;
+    $('cog').classList.toggle('lit', !panel.hidden);
+  }
+
+  private renderPianoPanel() {
+    $('roll').hidden = !this.settings.pianoOpen;
+    $('pianoToggle').textContent = this.settings.pianoOpen ? 'HIDE' : 'SHOW';
+    const led = $('pianoLed');
+    led.classList.toggle('muted', this.settings.pianoMuted);
+    led.title = this.settings.pianoMuted ? 'Muted. Click to unmute' : 'Click to mute';
+    $('roll').classList.toggle('muted', this.settings.pianoMuted);
+  }
+
   private patternName() {
     return this.library.pattern(this.settings.patternId)?.name ?? 'UNSAVED';
   }
@@ -456,16 +494,14 @@ export class App {
     this.grid.clear();
     const r = this.routine;
     if (r) {
-      const plan = routinePlan(r, this.library, this.settings);
-      this.grid.setPattern(plan.segments[0]?.pattern ?? emptyPattern());
-      this.roll.setNotes(plan.segments[0]?.piano ?? []);
-      const bars = plan.segments.reduce((a, s) => a + s.bars, 0);
-      this.controls.lcd('READY', `${plan.segments.length} PATTERNS  ${bars} BARS`);
+      const seg = routinePlan(r, this.library, this.settings).segments[0];
+      this.grid.setPattern(seg?.pattern ?? emptyPattern());
+      this.roll.setNotes(seg?.piano ?? []);
     } else {
       this.grid.setPattern(this.settings.pattern);
       this.roll.setNotes(this.settings.piano);
-      this.controls.lcd('READY', `${this.settings.bpm} BPM  ${this.settings.bars} BARS`);
     }
+    this.controls.status('');
     this.refresh();
   }
 
@@ -476,16 +512,10 @@ export class App {
     this.reviewBar = Math.min(refs.length - 1, Math.max(0, bar));
     const { seg, bar: b } = refs[this.reviewBar];
     const spec = r.plan.segments[seg];
-    const take = r.takes[seg];
-    this.grid.setPattern(spec.pattern);
+    this.grid.showBar(r.takes[seg], spec.pattern, b, true);
     this.roll.setNotes(spec.piano);
-    this.grid.showBar(take, spec.pattern, b, true);
-
-    const barLine = `BAR ${this.reviewBar + 1}/${refs.length}`.padEnd(10) + formatStats(timing(take, spec.pattern, { fromBar: b, toBar: b + 1, muted: this.settings.muted }));
-    const segLine = r.plan.routineId
-      ? `${seg + 1}/${r.takes.length} ${spec.name}`.slice(0, 24).padEnd(25) + `${spec.bpm} BPM`
-      : 'TOTAL'.padEnd(10) + formatStats(timing(take, spec.pattern, { muted: this.settings.muted }));
-    this.controls.lcd(barLine, segLine);
+    const where = `BAR ${this.reviewBar + 1}/${refs.length}`;
+    this.controls.status(r.plan.routineId ? `${seg + 1}/${r.takes.length} ${spec.name.slice(0, MAX_NAME)}  ${where}` : where);
     this.refresh();
   }
 
@@ -493,13 +523,9 @@ export class App {
     const r = this.routine;
     const saved = this.library.pattern(this.settings.patternId);
     $('srcKind').textContent = r ? 'ROUTINE' : 'PATTERN';
-    $('srcName').textContent = r
-      ? r.name
-      : saved
-        ? saved.name + (this.isUnmodified(saved) ? '' : ' *')
-        : 'UNSAVED';
+    $('srcName').textContent = r ? r.name : saved ? saved.name + (this.isUnmodified(saved) ? '' : ' *') : 'UNSAVED';
     const busy = this.mode !== 'idle';
-    for (const id of ['new', 'save'] as const) {
+    for (const id of ['new', 'load', 'save'] as const) {
       const b = $<HTMLButtonElement>(id);
       b.hidden = !!r;
       b.disabled = busy;
@@ -517,12 +543,12 @@ export class App {
       reviewBar: this.reviewBar,
       routine: !!this.routineId,
     });
+    this.controls.setLength(patternBars(this.settings.pattern));
     this.grid.setLocked(busy);
-    this.grid.setMuteLocked(busy && this.mode !== 'preview');
-    const editable = !this.routineId && (!busy || this.mode === 'preview');
-    this.roll.setLocked(!editable);
-    $<HTMLButtonElement>('pianoClear').disabled = !editable;
-    $<HTMLButtonElement>('pianoMute').disabled = busy && this.mode !== 'preview';
+    this.grid.setMuteLocked(busy && this.mode !== 'play');
+    this.roll.setLocked(!this.editable);
+    $<HTMLButtonElement>('pianoClear').disabled = !this.editable;
+    $<HTMLButtonElement>('pianoLed').disabled = busy && this.mode !== 'play';
     if (this.result) {
       this.breakdown.setCurrent(barRefs(this.result)[this.reviewBar].seg, this.mode === 'replay');
       this.breakdown.setLocked(busy && this.mode !== 'replay');

@@ -7,6 +7,7 @@ import {
   clonePiano,
   defaultClick,
   emptyClick,
+  patternSteps,
   type ClickPattern,
   type Pattern,
   type PianoNote,
@@ -45,9 +46,9 @@ export interface RunResult {
 
 export const stepDurFor = (bpm: number) => 60 / bpm / STEPS_PER_BEAT;
 
-/** Lead-in before each segment's played bars, in steps. */
-export const leadIn = (plan: RunPlan) => ({
-  hear: plan.hearFirst ? STEPS : 0,
+/** Lead-in before a segment's played bars, in steps: the whole pattern once if hearFirst, then the count-in. */
+export const leadIn = (plan: RunPlan, spec: SegmentSpec) => ({
+  hear: plan.hearFirst ? patternSteps(spec.pattern) : 0,
   count: plan.countIn * STEPS,
 });
 

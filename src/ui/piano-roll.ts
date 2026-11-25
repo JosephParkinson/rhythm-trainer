@@ -16,18 +16,20 @@ export const noteName = (pitch: number) => `${NAMES[pitch % 12]}${Math.floor(pit
 
 /**
  * Two-octave piano roll under the drum grid, with columns aligned to its steps.
+ * Like the grid it shows one bar (page) of the pattern; notes stay within a bar.
  * Mouse down on an empty cell starts a note; drag right to lengthen; release to
  * commit. Clicking a note deletes it. Live keyboard notes flash their row.
  */
 export class PianoRoll {
   private notes: PianoNote[] = [];
   private locked = false;
+  private page = 0;
   private readonly rowOf = new Map<number, number>();
   private readonly heads = new Map<number, HTMLElement>();
   private readonly noteEls: HTMLElement[] = [];
   private readonly flashTimers = new Map<number, number>();
-  /** note being drawn */
-  private drag: { pitch: number; step: number; el: HTMLElement } | null = null;
+  /** note being drawn; `col` is its first column on the page */
+  private drag: { pitch: number; col: number; el: HTMLElement } | null = null;
 
   constructor(
     private readonly root: HTMLElement,
@@ -58,6 +60,13 @@ export class PianoRoll {
     this.render();
   }
 
+  /** Bar of the pattern to show (follows the drum grid). */
+  setPage(page: number) {
+    if (page === this.page) return;
+    this.page = page;
+    this.render();
+  }
+
   setLocked(locked: boolean) {
     this.locked = locked;
     this.root.classList.toggle('locked', locked);
@@ -75,7 +84,8 @@ export class PianoRoll {
   private render() {
     this.noteEls.splice(0).forEach((n) => n.remove());
     for (const n of this.notes) {
-      const node = this.place(n.pitch, n.step, n.len, 'rollnote');
+      if (Math.floor(n.step / STEPS) !== this.page) continue;
+      const node = this.place(n.pitch, n.step % STEPS, n.len, 'rollnote');
       node.title = `${noteName(n.pitch)}  ${n.len}/16`;
       node.addEventListener('mousedown', (e) => {
         e.stopPropagation();
@@ -86,24 +96,24 @@ export class PianoRoll {
     }
   }
 
-  private place(pitch: number, step: number, len: number, cls: string) {
+  private place(pitch: number, col: number, len: number, cls: string) {
     const node = el('div', cls, this.root);
     node.style.gridRow = String(this.rowOf.get(pitch));
-    node.style.gridColumn = `${step + 2} / span ${len}`;
+    node.style.gridColumn = `${col + 2} / span ${len}`;
     return node;
   }
 
-  private startDraw(e: MouseEvent, pitch: number, step: number) {
+  private startDraw(e: MouseEvent, pitch: number, col: number) {
     if (this.locked || e.button !== 0) return;
     e.preventDefault();
-    this.drag = { pitch, step, el: this.place(pitch, step, 1, 'rollnote drawing') };
+    this.drag = { pitch, col, el: this.place(pitch, col, 1, 'rollnote drawing') };
     this.ev.audition(pitch);
   }
 
-  private extendDraw(pitch: number, step: number) {
+  private extendDraw(pitch: number, col: number) {
     const d = this.drag;
-    if (!d || pitch !== d.pitch || step < d.step) return;
-    d.el.style.gridColumn = `${d.step + 2} / span ${step - d.step + 1}`;
+    if (!d || pitch !== d.pitch || col < d.col) return;
+    d.el.style.gridColumn = `${d.col + 2} / span ${col - d.col + 1}`;
   }
 
   private endDraw() {
@@ -113,9 +123,10 @@ export class PianoRoll {
     const len = Number(/span (\d+)/.exec(d.el.style.gridColumn)?.[1] ?? 1);
     d.el.remove();
     // A new note replaces any it overlaps on the same pitch.
-    const end = d.step + len;
-    const kept = this.notes.filter((n) => n.pitch !== d.pitch || n.step + n.len <= d.step || n.step >= end);
-    this.commit([...kept, { pitch: d.pitch, step: d.step, len }]);
+    const step = this.page * STEPS + d.col;
+    const end = step + len;
+    const kept = this.notes.filter((n) => n.pitch !== d.pitch || n.step + n.len <= step || n.step >= end);
+    this.commit([...kept, { pitch: d.pitch, step, len }]);
   }
 
   private commit(notes: PianoNote[]) {

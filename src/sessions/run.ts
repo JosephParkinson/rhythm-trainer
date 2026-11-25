@@ -1,15 +1,18 @@
 import { Scheduler, playClickStep, playCountInStep, playPatternStep, playPianoStep } from '../audio/scheduler';
 import { leadIn, stepDurFor, type RunPlan, type RunResult, type SegmentSpec } from '../plan';
 import { Take } from '../scoring';
-import { BEATS_PER_BAR, STEPS, STEPS_PER_BEAT } from '../settings';
+import { BEATS_PER_BAR, STEPS, STEPS_PER_BEAT, patternSteps } from '../settings';
 import type { Deps, Session } from './session';
 
 const LEAD_IN = 0.25;
-const MAX_NAME = 22;
+const MAX_NAME = 16;
 
 interface Segment {
   spec: SegmentSpec;
   stepDur: number;
+  /** steps of pattern heard first (0 if off), then where the played bars start */
+  hear: number;
+  lead: number;
   /** AudioContext time the segment's lead-in starts */
   start: number;
   take: Take;
@@ -17,15 +20,14 @@ interface Segment {
 }
 
 /**
- * Plays a RunPlan: for each segment, an optional bar of the pattern, the
- * count-in, then the played bars with the segment's click. Segments run back to
- * back, each with its own scheduler (created up front; later ones just wait).
+ * TEST: plays a RunPlan. For each segment: optionally the whole pattern once,
+ * the count-in, then the played bars with the segment's click (the pattern
+ * loops if it's shorter than the bars played). Segments run back to back, each
+ * with its own scheduler (created up front; later ones just wait).
  */
 export class RunSession implements Session {
-  readonly mode = 'play';
+  readonly mode = 'test';
   private readonly segs: Segment[];
-  private readonly hear: number;
-  private readonly lead: number;
   private readonly latency: number;
   private shown = '';
 
@@ -34,29 +36,30 @@ export class RunSession implements Session {
     readonly plan: RunPlan,
   ) {
     const { eng } = d;
-    const { hear, count } = leadIn(plan);
-    this.hear = hear;
-    this.lead = hear + count;
     this.latency = d.settings.latency / 1000;
 
     let t = eng.now + LEAD_IN;
     this.segs = plan.segments.map((spec) => {
+      const { hear, count } = leadIn(plan, spec);
+      const lead = hear + count;
+      const len = patternSteps(spec.pattern);
       const stepDur = stepDurFor(spec.bpm);
       const start = t;
-      const take = new Take(start + this.lead * stepDur, stepDur, spec.bars);
-      const sched = new Scheduler(eng, start, stepDur, 0, this.lead + take.steps, (step, time) => {
+      const take = new Take(start + lead * stepDur, stepDur, spec.bars);
+      const sched = new Scheduler(eng, start, stepDur, 0, lead + take.steps, (step, time) => {
         const backing = !d.settings.pianoMuted;
         if (step < hear) {
-          playPatternStep(eng, spec.pattern, step % STEPS, time, d.settings.muted);
-          if (backing) playPianoStep(eng, spec.piano, step % STEPS, time, stepDur);
-        } else if (step < this.lead) playCountInStep(eng, step - hear, time);
+          playPatternStep(eng, spec.pattern, step, time, d.settings.muted);
+          if (backing) playPianoStep(eng, spec.piano, step, time, stepDur);
+        } else if (step < lead) playCountInStep(eng, step - hear, time);
         else {
-          playClickStep(eng, spec.click, (step - this.lead) % STEPS, time);
-          if (backing) playPianoStep(eng, spec.piano, (step - this.lead) % STEPS, time, stepDur);
+          const played = step - lead;
+          playClickStep(eng, spec.click, played % STEPS, time);
+          if (backing) playPianoStep(eng, spec.piano, played % len, time, stepDur);
         }
       });
       t = take.end;
-      return { spec, stepDur, start, take, sched };
+      return { spec, stepDur, hear, lead, start, take, sched };
     });
   }
 
@@ -73,27 +76,34 @@ export class RunSession implements Session {
     const i = Math.max(0, this.segs.findLastIndex((s) => s.start <= now));
     const seg = this.segs[i];
     const pos = (now - seg.start) / seg.stepDur;
-    let line1: string;
+    let text: string;
     let playhead = -1;
-    let bar = 0;
 
-    if (pos < 0) line1 = 'READY';
-    else if (pos < this.hear) {
-      line1 = 'LISTEN';
-      playhead = Math.floor(pos) % STEPS;
-    } else if (pos < this.lead) {
-      line1 = `COUNT-IN  ${(Math.floor((pos - this.hear) / STEPS_PER_BEAT) % BEATS_PER_BAR) + 1}`;
+    if (pos < seg.lead) {
+      controls.setRecording(pos < 0 ? 'off' : 'lead');
+      if (pos >= 0 && pos < seg.hear) {
+        // Hearing the pattern: follow it across its pages.
+        text = 'LISTEN';
+        const step = Math.floor(pos);
+        grid.setPage(Math.floor(step / STEPS));
+        playhead = step % STEPS;
+        this.shown = '';
+      } else {
+        text = pos < 0 ? '' : `COUNT ${(Math.floor((pos - seg.hear) / STEPS_PER_BEAT) % BEATS_PER_BAR) + 1}`;
+        this.show(i, 0);
+      }
     } else {
-      const played = pos - this.lead;
+      controls.setRecording('rec');
+      const played = pos - seg.lead;
       const step = Math.min(Math.floor(played), seg.take.steps - 1);
-      bar = Math.floor(step / STEPS);
+      const bar = Math.floor(step / STEPS);
       if (played < seg.take.steps) playhead = step % STEPS;
-      line1 = `BAR ${bar + 1}/${seg.spec.bars}`;
+      this.show(i, bar);
+      text = `BAR ${bar + 1}/${seg.spec.bars}`;
     }
 
-    this.show(i, bar);
     grid.setPlayhead(playhead);
-    controls.lcd(line1, this.status(i));
+    controls.status(this.plan.routineId ? `${i + 1}/${this.segs.length} ${seg.spec.name.slice(0, MAX_NAME)}  ${text}` : text);
   }
 
   hit(track: number, perfMs: number, vel: number) {
@@ -112,6 +122,7 @@ export class RunSession implements Session {
     this.d.eng.cancelScheduled();
   }
 
+  /** Shows a played bar of a segment (its pattern page, roll and hits so far). */
   private show(i: number, bar: number) {
     const key = `${i}:${bar}`;
     if (key === this.shown) return;
@@ -120,11 +131,5 @@ export class RunSession implements Session {
     this.d.grid.setPattern(spec.pattern);
     this.d.roll.setNotes(spec.piano);
     this.d.grid.showBar(take, spec.pattern, bar, false);
-  }
-
-  private status(i: number) {
-    const { spec } = this.segs[i];
-    if (!this.plan.routineId) return `${spec.bpm} BPM`;
-    return `${i + 1}/${this.segs.length} ${spec.name.slice(0, MAX_NAME)}`.padEnd(30) + `${spec.bpm} BPM`;
   }
 }

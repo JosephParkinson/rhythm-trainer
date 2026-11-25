@@ -11,13 +11,13 @@ export class LagSession implements Session {
   constructor(d: Deps) {
     const { controls, eng } = d;
     this.test = new LagTest(eng);
-    controls.lcd('MIC...');
+    controls.testStatus('MIC...');
     this.test
-      .run((taps) => controls.lcd(`TAP SLOWLY  ${taps}/${LAG_TAPS}`, 'SPEAKERS ON, NO HEADPHONES'))
+      .run((taps) => controls.testStatus(`TAP SLOWLY  ${taps}/${LAG_TAPS}`, 'SPEAKERS ON, NO HEADPHONES'))
       .then(
         (r) =>
-          controls.lcd(`TAP TO SOUND ${r.lag}MS  ±${r.jitter}MS`, `BROWSER OUTPUT ${eng.outputLatencyMs}MS  (${r.used} TAPS)`),
-        (e) => this.cancelled || controls.lcd('LAG TEST FAILED', errorText(e)),
+          controls.testStatus(`TAP TO SOUND ${r.lag}MS  ±${r.jitter}MS`, `BROWSER OUTPUT ${eng.outputLatencyMs}MS  (${r.used} TAPS)`),
+        (e) => this.cancelled || controls.testStatus('LAG TEST FAILED', errorText(e)),
       )
       .finally(() => d.finish(this));
   }

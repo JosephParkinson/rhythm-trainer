@@ -40,10 +40,19 @@ body {
 .top {
   display: flex;
   flex-wrap: wrap;
-  justify-content: space-between;
   align-items: center;
-  gap: 10px 16px;
+  gap: 8px 12px;
   margin-bottom: 10px;
+}
+
+.top .tabs {
+  margin-bottom: 0;
+}
+
+.topright {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .brand {
@@ -53,28 +62,12 @@ body {
   text-shadow: 1px 1px 0 #000;
 }
 
+.brand {
+  margin-right: 6px;
+}
+
 .brand span {
-  margin-left: 4px;
   color: var(--led);
-}
-
-.lcd {
-  width: 440px;
-  max-width: 100%;
-  padding: 4px 8px;
-  background: var(--lcd-bg);
-  border: 2px solid;
-  border-color: var(--lo) var(--hi) var(--hi) var(--lo);
-  color: var(--lcd);
-  font: bold 12px 'Courier New', Courier, monospace;
-  line-height: 1.35;
-  white-space: pre;
-  overflow: hidden;
-  text-shadow: 0 0 4px rgba(140, 255, 106, 0.55);
-}
-
-.lcd div {
-  min-height: 1.35em;
 }
 
 .panel {
@@ -182,7 +175,8 @@ input:disabled,
   cursor: default;
 }
 
-.btn.play::before {
+.btn.play::before,
+.btn.test::before {
   content: '';
   display: inline-block;
   width: 7px;
@@ -196,6 +190,21 @@ input:disabled,
 .btn.play.lit::before {
   background: var(--good);
   box-shadow: 0 0 5px var(--good);
+}
+
+/* TEST: red = recording. Dim during the pattern/count-in, lit when it's your turn. */
+.btn.test::before {
+  border-radius: 50%;
+  background: #3a1212;
+}
+
+.btn.test.rec-lead::before {
+  background: #8a2a20;
+}
+
+.btn.test.rec-on::before {
+  background: #ff3b2e;
+  box-shadow: 0 0 6px #ff3b2e;
 }
 
 .nav {
@@ -232,21 +241,40 @@ input:disabled,
   display: flex;
   align-items: center;
   gap: 5px;
+  padding: 0;
+  background: none;
+  border: 0;
   color: #ddd;
   font: 900 13px 'Arial Black', Arial, sans-serif;
+  cursor: pointer;
 }
 
+/* The light is the mute switch: green = on, dark = muted, amber flash = hit. */
 .lbl::before {
   content: '';
   width: 6px;
   height: 6px;
-  background: var(--led-off);
+  background: #3fae3f;
   border: 1px solid #000;
+  box-shadow: 0 0 3px rgba(92, 255, 92, 0.5);
+}
+
+.lbl.muted {
+  color: var(--dim);
+}
+
+.lbl.muted::before {
+  background: #1f2a1f;
+  box-shadow: none;
 }
 
 .lbl.flash::before {
   background: var(--led);
   box-shadow: 0 0 6px var(--led);
+}
+
+.lbl:disabled {
+  cursor: default;
 }
 
 .cell {
@@ -340,34 +368,6 @@ input:disabled,
 .beatnum {
   text-align: center;
   color: var(--dim);
-}
-
-.legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 16px;
-  margin-top: 8px;
-  color: var(--dim);
-}
-
-.legend span {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.legend .mk {
-  position: static;
-  display: inline-block;
-  height: 11px;
-  margin: 0;
-}
-
-.legend .missbox {
-  display: inline-block;
-  width: 12px;
-  height: 11px;
-  border: 2px solid var(--bad);
 }
 
 /* ---------- layout: fixed rack width so views don't jump ---------- */
@@ -738,11 +738,6 @@ table.data .ctl {
   margin-bottom: 8px;
 }
 
-.tabright {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
 
 /* breakdown: pattern rows are clickable, ▶ replays one pattern */
 
@@ -780,20 +775,6 @@ table.data tr.locked {
 .outlat {
   color: var(--dim);
   font: bold 11px 'Courier New', Courier, monospace;
-}
-
-/* per-row mute */
-
-.rowhead .btn.tiny.mute {
-  margin: 0 0 0 auto;
-  margin-right: 6px;
-  padding: 1px 5px;
-}
-
-.btn.tiny.mute.lit {
-  color: var(--led);
-  background: linear-gradient(#36393d, #4a4d53);
-  border-color: var(--lo) #7a7f87 #7a7f87 var(--lo);
 }
 
 .cell.muted {
@@ -885,7 +866,154 @@ table.data tr.locked {
   cursor: default;
 }
 
-.btn.tiny.mute.lit,
-#pianoMute.lit {
+
+/* ---------- LED toggles (styled like the MIDI light) ---------- */
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 0;
+  background: none;
+  border: 0;
+  color: var(--dim);
+  font: bold 11px Tahoma, Verdana, sans-serif;
+  cursor: pointer;
+}
+
+.toggle::before {
+  content: '';
+  flex: none;
+  width: 7px;
+  height: 7px;
+  background: #1f4a1f;
+  border: 1px solid #000;
+}
+
+.toggle.on {
+  color: var(--text);
+}
+
+.toggle.on::before {
+  background: var(--good);
+  box-shadow: 0 0 5px var(--good);
+}
+
+.toggle:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.toggle svg {
+  width: 16px;
+  height: 16px;
+}
+
+.toggles {
+  display: flex;
+  gap: 14px;
+}
+
+/* ---------- settings ---------- */
+
+.btn.icon {
+  display: flex;
+  align-items: center;
+  padding: 3px 6px;
+}
+
+.btn.icon svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
+.btn.icon.lit {
   color: var(--led);
+}
+
+.settings .btnrow {
+  gap: 6px 14px;
+}
+
+.lcdline {
+  margin-top: 6px;
+  padding: 3px 8px;
+  min-height: 2.9em;
+  background: var(--lcd-bg);
+  border: 2px solid;
+  border-color: var(--lo) var(--hi) var(--hi) var(--lo);
+  color: var(--lcd);
+  font: bold 12px 'Courier New', Courier, monospace;
+  line-height: 1.35;
+  white-space: pre;
+  text-shadow: 0 0 4px rgba(140, 255, 106, 0.55);
+}
+
+/* ---------- transport status readout ---------- */
+
+.status {
+  min-width: 190px;
+  padding: 3px 8px;
+  background: var(--lcd-bg);
+  border: 2px solid;
+  border-color: var(--lo) var(--hi) var(--hi) var(--lo);
+  color: var(--lcd);
+  font: bold 12px 'Courier New', Courier, monospace;
+  white-space: pre;
+  text-shadow: 0 0 4px rgba(140, 255, 106, 0.55);
+}
+
+.status:empty::before {
+  content: '\00a0';
+}
+
+/* ---------- bar pages ---------- */
+
+.pages {
+  display: flex;
+  gap: 4px;
+  margin: 0 0 6px 144px;
+}
+
+.pagebtn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px 2px 4px;
+  background: linear-gradient(#5e6269, #3b3e43);
+  color: var(--text);
+  border: 2px solid;
+  border-color: #7a7f87 var(--lo) var(--lo) #7a7f87;
+  font: bold 11px Tahoma, Verdana, sans-serif;
+  cursor: pointer;
+}
+
+.pagebtn::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  background: var(--led-off);
+  border: 1px solid #000;
+}
+
+.pagebtn.on {
+  background: linear-gradient(#36393d, #4a4d53);
+  border-color: var(--lo) #7a7f87 #7a7f87 var(--lo);
+}
+
+.pagebtn.on::before {
+  background: var(--led);
+  box-shadow: 0 0 5px var(--led);
+}
+
+/* ---------- KEYS label (mute light) ---------- */
+
+.keyslbl {
+  font-size: 11px;
+  color: var(--dim);
+}
+
+.top .push {
+  margin-left: auto;
 }

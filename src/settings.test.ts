@@ -1,5 +1,17 @@
 import { expect, test } from 'vitest';
-import { STEPS, clampSetting, defaultSettings, samePiano, sanitize, sanitizePiano } from './settings';
+import {
+  STEPS,
+  clampSetting,
+  defaultSettings,
+  emptyPattern,
+  isPatternGrid,
+  patternBars,
+  resizePattern,
+  resizePiano,
+  samePiano,
+  sanitize,
+  sanitizePiano,
+} from './settings';
 
 test('garbage falls back to defaults', () => {
   expect(sanitize(null)).toEqual(defaultSettings());
@@ -63,4 +75,31 @@ test('note channels: valid mask kept, defaults to the GM drum channel', () => {
   expect(defaultSettings().noteChannels).toEqual([9, 9, 9, 9]);
   expect(sanitize({ noteChannels: [0, null, 15, 9] }).noteChannels).toEqual([0, null, 15, 9]);
   expect(sanitize({ noteChannels: [16, 0, 0, 0] }).noteChannels).toEqual([9, 9, 9, 9]);
+});
+
+test('patterns can be 1 to 4 bars', () => {
+  expect(isPatternGrid(emptyPattern(1))).toBe(true);
+  expect(isPatternGrid(emptyPattern(4))).toBe(true);
+  expect(isPatternGrid(emptyPattern(5))).toBe(false);
+  expect(isPatternGrid([[true]])).toBe(false);
+  expect(patternBars(sanitize({ pattern: emptyPattern(3) }).pattern)).toBe(3);
+});
+
+test('resizing repeats bars when growing and drops them when shrinking', () => {
+  const p = emptyPattern(1);
+  p[0][0] = true;
+  const two = resizePattern(p, 2);
+  expect(two[0].length).toBe(2 * STEPS);
+  expect(two[0][STEPS]).toBe(true);
+  expect(resizePattern(two, 1)[0].length).toBe(STEPS);
+
+  const notes = [{ pitch: 60, step: 4, len: 2 }];
+  expect(resizePiano(notes, 1, 3).map((n) => n.step)).toEqual([4, 20, 36]);
+  expect(resizePiano([...notes, { pitch: 62, step: 20, len: 1 }], 2, 1)).toEqual(notes);
+});
+
+test('piano notes may sit in later bars but not cross a bar line', () => {
+  expect(sanitizePiano([{ pitch: 60, step: 30, len: 2 }], 32)).toHaveLength(1);
+  expect(sanitizePiano([{ pitch: 60, step: 14, len: 4 }], 32)).toHaveLength(0);
+  expect(sanitizePiano([{ pitch: 60, step: 40, len: 1 }], 32)).toHaveLength(0);
 });

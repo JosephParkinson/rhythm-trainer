@@ -1,43 +1,54 @@
 import { scoreCell, type Take } from '../scoring';
-import { STEPS, STEPS_PER_BEAT, TRACKS, type Pattern } from '../settings';
+import { STEPS, STEPS_PER_BEAT, TRACKS, patternBars, patternSteps, type Pattern } from '../settings';
 import { el } from './dom';
 import { fmtMs } from './format';
 
 export interface GridEvents {
+  /** a cell was clicked; `step` is the pattern step (page × 16 + column) */
   toggle(track: number, step: number): void;
   bindClick(track: number): void;
   muteClick(track: number): void;
+  /** a page button was clicked */
+  pageClick(page: number): void;
+  /** the page shown changed (by click or by following playback) */
+  pageChanged(page: number): void;
 }
 
 const SUBDIVISIONS = ['', 'e', '&', 'a'];
 const FLASH_MS = 90;
 
-/** The step grid: step LEDs, track rows with binding buttons, cells with hit markers. */
+/**
+ * The step grid shows one bar (page) of the pattern at a time: step LEDs, track
+ * rows (label light = mute toggle, binding button), cells with hit markers.
+ * Page buttons above it pick the bar; they're hidden for one-bar patterns.
+ */
 export class Grid {
   private readonly leds: HTMLElement[] = [];
   private readonly cells: HTMLElement[][] = [];
-  private readonly labels: HTMLElement[] = [];
+  private readonly labels: HTMLButtonElement[] = [];
   private readonly binds: HTMLButtonElement[] = [];
-  private readonly mutes: HTMLButtonElement[] = [];
-  private muted: readonly boolean[] = [];
   private readonly flashTimers: number[] = [];
+  private pageButtons: HTMLButtonElement[] = [];
+  private muted: readonly boolean[] = [];
+  private pattern: Pattern = [];
+  private page = 0;
   private playhead = -1;
 
-  constructor(root: HTMLElement, ev: GridEvents) {
+  constructor(
+    root: HTMLElement,
+    private readonly pagesRoot: HTMLElement,
+    private readonly ev: GridEvents,
+  ) {
     el('div', '', root);
     for (let s = 0; s < STEPS; s++) this.leds.push(el('div', 'stepled', root));
 
     TRACKS.forEach((track, t) => {
       const head = el('div', 'rowhead', root);
-      const label = el('span', 'lbl', head);
+      const label = el('button', 'lbl', head);
       label.textContent = track.name;
+      label.title = 'Click to mute';
+      label.addEventListener('click', () => ev.muteClick(t));
       this.labels.push(label);
-
-      const mute = el('button', 'btn tiny mute', head);
-      mute.textContent = 'M';
-      mute.title = 'Mute: silent and not scored';
-      mute.addEventListener('click', () => ev.muteClick(t));
-      this.mutes.push(mute);
 
       const bind = el('button', 'bind', head);
       bind.title = 'Click, then press a key or pad';
@@ -47,7 +58,7 @@ export class Grid {
       this.cells.push(
         Array.from({ length: STEPS }, (_, s) => {
           const cell = el('div', Math.floor(s / STEPS_PER_BEAT) % 2 ? 'cell alt' : 'cell', root);
-          cell.addEventListener('mousedown', () => ev.toggle(t, s));
+          cell.addEventListener('mousedown', () => ev.toggle(t, this.page * STEPS + s));
           return cell;
         }),
       );
@@ -60,15 +71,30 @@ export class Grid {
     }
   }
 
+  get currentPage() {
+    return this.page;
+  }
+
+  /** Shows a pattern (keeping the page if it still exists). */
   setPattern(p: Pattern) {
-    this.cells.forEach((row, t) => row.forEach((c, s) => c.classList.toggle('on', p[t][s])));
+    this.pattern = p;
+    const bars = patternBars(p);
+    if (this.pageButtons.length !== bars) this.buildPages(bars);
+    if (this.page >= bars) this.setPage(bars - 1);
+    else this.renderPage();
+  }
+
+  setPage(page: number) {
+    if (page === this.page) return;
+    this.page = page;
+    this.renderPage();
+    this.ev.pageChanged(page);
   }
 
   /** Draws one cell's hits; `step` is the take's global step. In review, empty targets show as missed. */
   showCell(take: Take, pattern: Pattern, track: number, step: number, review: boolean) {
-    const s = step % STEPS;
-    const cell = this.cells[track][s];
-    const target = pattern[track][s];
+    const cell = this.cells[track][step % STEPS];
+    const target = pattern[track][step % patternSteps(pattern)];
     const hits = this.muted[track] ? [] : take.at(track, step);
     cell.querySelectorAll('.mk').forEach((m) => m.remove());
     cell.classList.toggle('miss', review && target && hits.length === 0 && !this.muted[track]);
@@ -82,7 +108,10 @@ export class Grid {
     }
   }
 
+  /** Shows bar `bar` of a take: the matching pattern page plus that bar's hits. */
   showBar(take: Take, pattern: Pattern, bar: number, review: boolean) {
+    if (pattern !== this.pattern) this.setPattern(pattern);
+    this.setPage(bar % patternBars(pattern));
     for (let t = 0; t < TRACKS.length; t++) {
       for (let s = 0; s < STEPS; s++) this.showCell(take, pattern, t, bar * STEPS + s, review);
     }
@@ -95,7 +124,7 @@ export class Grid {
     }
   }
 
-  /** -1 hides it. */
+  /** Column 0–15 of the current page; -1 hides it. */
   setPlayhead(step: number) {
     if (step === this.playhead) return;
     this.leds[this.playhead]?.classList.remove('lit');
@@ -120,15 +149,36 @@ export class Grid {
     this.binds.forEach((b) => (b.disabled = locked));
   }
 
-  /** Muted rows are dimmed and show no hits. Redraw the bar afterwards to update markers. */
+  /** Muted rows: light off, cells dimmed, no hits shown. Redraw the bar afterwards to update markers. */
   setMuted(muted: readonly boolean[]) {
     this.muted = [...muted];
-    this.mutes.forEach((b, t) => b.classList.toggle('lit', !!muted[t]));
+    this.labels.forEach((b, t) => {
+      b.classList.toggle('muted', !!muted[t]);
+      b.title = muted[t] ? 'Muted. Click to unmute' : 'Click to mute';
+    });
     this.cells.forEach((row, t) => row.forEach((c) => c.classList.toggle('muted', !!muted[t])));
   }
 
-  /** Mute buttons stay usable while idle or previewing. */
+  /** Mute lights stay clickable while idle or playing. */
   setMuteLocked(locked: boolean) {
-    this.mutes.forEach((b) => (b.disabled = locked));
+    this.labels.forEach((b) => (b.disabled = locked));
+  }
+
+  private buildPages(bars: number) {
+    this.pagesRoot.replaceChildren();
+    this.pagesRoot.hidden = bars < 2;
+    this.pageButtons = Array.from({ length: bars }, (_, p) => {
+      const b = el('button', 'pagebtn', this.pagesRoot);
+      b.textContent = String(p + 1);
+      b.title = `Bar ${p + 1}`;
+      b.addEventListener('click', () => this.ev.pageClick(p));
+      return b;
+    });
+  }
+
+  private renderPage() {
+    const base = this.page * STEPS;
+    this.cells.forEach((row, t) => row.forEach((c, s) => c.classList.toggle('on', !!this.pattern[t]?.[base + s])));
+    this.pageButtons.forEach((b, p) => b.classList.toggle('on', p === this.page));
   }
 }

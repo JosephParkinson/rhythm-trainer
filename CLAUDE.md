@@ -33,6 +33,21 @@ npm run dist:mac                     # macOS .dmg, arm64 + x64 (needs macOS)
 
 Icons are rendered from `public/icon.svg` into `public/icon-*.png`, `public/apple-touch-icon.png` and `build/icon.png`; electron-builder picks up the last one automatically. `.github/workflows/pages.yml` can publish `dist/` to GitHub Pages when run manually.
 
+**Mac self-update.** `scripts/update-mac.sh` does the whole update:
+1. quit the app
+2. back up `~/Library/Application Support/Rhythm Trainer` into `… Rhythm Trainer Backups/` (keeps 10)
+3. `git pull --ff-only`, then `npm install`
+4. build this Mac's architecture as a plain `.app`
+5. replace `/Applications/Rhythm Trainer.app`, then reopen it
+
+Details:
+- Run it with `npm run update:mac`, or with the UPDATE button.
+- On failure the old app is left in place and reopened. The log is in `~/Library/Logs/Rhythm Trainer/update.log`.
+- The script's body is a `main()` function, so bash has read all of it before `git pull` can change the file.
+- The button (`src/desktop.ts`) talks to the wrapper through `electron/preload.cjs` (`window.desktop`). It only shows on macOS when the build recorded `repoPath`, which `dist:mac` and the script pass via `-c.extraMetadata.repoPath`.
+- The main process launches the script through a login zsh to pick up the user's PATH, and runs it detached so it outlives the app.
+- A real auto-updater (electron-updater) would need a signed app.
+
 **Desktop app.** `electron/main.cjs` serves `dist/` from a privileged `app://rhythm-trainer/` origin. That makes it a secure context, which mic, MIDI and AudioWorklet need. It also gives a stable origin, so `localStorage` persists between launches. Only `media` and `midi` permissions are granted. `vite.config.ts` uses `base: './'` so one build works both on the web and in Electron. Packaging config lives under `build` in `package.json`. `.github/workflows/desktop.yml` builds the Mac and Windows apps on manual dispatch or a `v*` tag, and attaches them to a release when triggered by a tag. Builds are unsigned.
 
 Tests cover the pure logic: scoring, settings and library sanitising, library operations, plans, history, and calibration analysis on synthetic recordings. Anything touching `AudioContext` or the DOM is untested, so check it in a browser.
@@ -48,9 +63,9 @@ Tests cover the pure logic: scoring, settings and library sanitising, library op
 
 It runs **at most one `Session` at a time**. A session is one transport activity:
 
-- `sessions/run.ts`: plays a `RunPlan` and records a `Take` per segment.
+- `sessions/run.ts` (mode `test`, the TEST button): plays a `RunPlan` and records a `Take` per segment. It drives TEST's red light via `controls.setRecording`: dim during the lead-in, lit while recording.
 - `sessions/replay.ts`: plays a result's hits back at their real times, with the click that was heard, for a global bar range. REPLAY plays from the bar on screen to the end of its pattern (segment). In the breakdown table, ▶ replays one pattern, and clicking a pattern row jumps the review to it.
-- `sessions/preview.ts`: loops one pattern, reading it live so edits are heard.
+- `sessions/play.ts` (mode `play`, the PLAY button or the space bar): loops one pattern, reading it live so edits are heard. Pausing stores `position`, and the next PLAY resumes from there. The space bar only does this when it isn't bound to a drum.
 - `sessions/calibrate.ts`: runs mic latency calibration.
 - `sessions/lag.ts`: LAG TEST, which measures tap-to-sound delay with the mic.
 
@@ -63,7 +78,7 @@ Mic tests set `mutesHits`, so hits make no drum sound.
 3. Implement `Session`.
 4. Add a case to `App.start()`.
 
-**Plans and results** (`plan.ts`). PLAY always runs a `RunPlan`, a list of segments, each with its own pattern, click track, BPM and bars:
+**Plans and results** (`plan.ts`). TEST always runs a `RunPlan`, a list of segments, each with its own pattern, click track, BPM and bars:
 
 - `editorPlan()` makes one segment that *shares* the editor's pattern array, so editing after a run re-scores the review.
 - `routinePlan()` makes one segment per routine item, copying each pattern.
@@ -88,7 +103,7 @@ Before its played bars, each segment has a lead-in: one bar of the pattern if `h
 
 - Per cell, the closest hit on a target step is graded (`GOOD_MS`/`OK_MS`) and every other hit is "extra".
 - `collect()` gathers raw errors with an optional filter by track, beat position (`sub`) or bar range.
-- `settings.muted` (the per-row **M** buttons) is applied at render time: `CellFilter.muted` drops those tracks from targets and extras. So muting after a run re-scores it, the same as pattern edits. Muted tracks are also silent in HEAR FIRST, PREVIEW (live) and REPLAY. Runs with anything muted aren't logged to history.
+- `settings.muted` (toggled by clicking a track's light: green = on, dark = muted) is applied at render time: `CellFilter.muted` drops those tracks from targets and extras. So muting after a run re-scores it, the same as pattern edits. Muted tracks are also silent in HEAR FIRST, PLAY (live) and REPLAY. Runs with anything muted aren't logged to history.
 - `summarize()` merges samples into `TimingStats`: notes, hit, extra, avg (mean |err|), bias (mean err), sd, p90. Everything is raw ms, with no composite scores.
 
 **Library and history** (`library.ts`, `history.ts`) are stored in `localStorage` under `rhythm-trainer-library` and `rhythm-trainer-history`. Both take an injectable `KeyValueStore`, which the tests replace with an in-memory store. Rules:
@@ -97,7 +112,7 @@ Before its played bars, each segment has a lead-in: one bar of the pattern if `h
 - Deleting a pattern removes it from every routine.
 - Every `Library` mutation saves and notifies `onChange` listeners. The views re-render from scratch on change.
 - History keeps a `summariseRun()` summary per run, not raw hits, capped at 2000 records.
-- Routines always log. A single PLAY logs only if the editor holds a saved pattern *unmodified* (`sameGrid`).
+- Routines always log. A single TEST logs only if the editor holds a saved pattern *unmodified* (`sameGrid`).
 
 **UI** (`ui/`):
 
@@ -130,13 +145,17 @@ The views call `Library` directly and tell `App` only to load a pattern or routi
 
 The mic must be opened with echoCancellation, noiseSuppression and autoGainControl off, or the click gets filtered out. `analyseCalibration()` is pure and tested.
 
+**Pattern length and pages.** A pattern is 1–4 bars: each `pattern` row is 16 × bars long, and the length is derived from the row length (`patternBars`). LENGTH resizes it: growing repeats the existing bars, shrinking drops the end (`resizePattern`, `resizePiano`). Anywhere a take step meets the pattern, it indexes `step % patternSteps(pattern)`, so the pattern loops over BARS. HEAR FIRST plays the whole pattern once. The grid and piano roll show one bar (page) at a time: `Grid.setPage` (with `pageChanged`, which keeps the roll in sync) follows the playhead during PLAY, TEST and REPLAY. Page buttons appear for multi-bar patterns. Piano notes may sit in any bar but not cross a bar line. Click tracks stay one bar long.
+
+**Status readouts.** There's no main LCD. `controls.status()` writes the small readout next to the transport (count-in, BAR n/m, routine progress). `controls.testStatus()` writes the readout in the settings panel (the cog), which also holds LATENCY, CALIBRATE, LAG TEST, HEAR FIRST, LOW LATENCY and the OUT figure.
+
 **Keyboard part.**
 - **Drawing:** `ui/piano-roll.ts` is a C3–B4 piano roll under the drum grid, with columns aligned to its steps. The notes are `PianoNote {pitch, step, len}` (one bar), stored as `settings.piano` and in `SavedPattern.piano` and `SegmentSpec.piano`.
 - **Sound:** an FM electric piano (`audio/epiano.ts`). Live notes use `Engine.pianoDown/Up`; the backing uses `schedulePiano`.
-- **Playback:** the backing loops in HEAR FIRST, PREVIEW, played bars and REPLAY via `playPianoStep`. It's never scored. `settings.pianoMuted` silences it.
-- **Edits:** happen in place on `settings.piano`, so a running preview hears them. "Modified" (the `*` marker, and whether history logs a run) compares both the drum grid and the piano part.
+- **Playback:** the backing loops in HEAR FIRST, PLAY, TEST's played bars and REPLAY via `playPianoStep`. It's never scored. `settings.pianoMuted` silences it.
+- **Edits:** happen in place on `settings.piano`, so PLAY hears them while looping. "Modified" (the `*` marker, and whether history logs a run) compares both the drum grid and the piano part.
 
-**Input** (`input/bindings.ts`). Each track has one key (`settings.keys`, `''` when unbound) and one MIDI note plus channel (`settings.notes` and `settings.noteChannels`, defaulting to GM 36/38/42/46 on channel 10; a `null` channel means any channel). `input/routing.ts` (pure, tested) decides where each note goes: a matching drum binding plays the drum; any other note on a channel a drum binding uses is ignored, so pads never play the piano even when they share note numbers with the keys; everything else plays the piano. `learn(track)` makes the next key or note that track's binding and removes it from any other track. Keys are ignored while typing in inputs, dropdowns or dialogs. Hits are silent during calibration so the mic only hears the key.
+**Input** (`input/bindings.ts`). Each track has one key (`settings.keys`, `''` when unbound) and one MIDI note plus channel (`settings.notes` and `settings.noteChannels`, defaulting to GM 36/38/42/46 on channel 10; a `null` channel means any channel). `input/routing.ts` (pure, tested) decides where each note goes: a note assigned to a drum always plays that drum and never the piano (an exact note+channel binding wins, otherwise the note number alone matches); any other note on GM channel 10 is ignored, so unassigned pads stay silent; everything else plays the piano. `learn(track)` makes the next key or note that track's binding and removes it from any other track. Keys are ignored while typing in inputs, dropdowns or dialogs. Hits are silent during calibration so the mic only hears the key.
 
 **Settings** (`settings.ts`) persist under `rhythm-trainer`:
 
@@ -146,6 +165,6 @@ The mic must be opened with echoCancellation, noiseSuppression and autoGainContr
 
 ## UI style
 
-Retro 2000s drum-machine look: bevelled grey panels, LED indicators, green LCD text, Courier for data. Use the minimum text needed and keep labels terse and uppercase. Put explanations in `title` tooltips rather than on the page. Avoid modern flat or "slick" styling.
+Retro 2000s drum-machine look: bevelled grey panels, LED indicators, green LCD text, Courier for data. On/off settings are LED toggles (`.toggle`, like the MIDI light), never browser checkboxes. Icons are small inline SVGs in `currentColor`. Use the minimum text needed and keep labels terse and uppercase. Put explanations in `title` tooltips rather than on the page. Avoid modern flat or "slick" styling.
 
 The history chart's series colours (AVG `#c4841c`, SD `#3f8ee6`) were checked with the dataviz palette validator against the LCD background `#0c180a`. Re-check if you add a series or change the background.

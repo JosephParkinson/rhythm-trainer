@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Rhythm Trainer</title>
+    <title>RT-01</title>
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
     <link rel="manifest" href="./manifest.webmanifest" />
@@ -12,46 +12,72 @@
   <body>
     <div class="rack">
       <div class="top">
-        <div class="brand">RHYTHM<span>TRAINER</span></div>
-        <div class="lcd"><div id="lcd1"></div><div id="lcd2"></div></div>
-      </div>
-
-      <div class="tabs">
-        <button id="tab-trainer" class="btn tab">TRAINER</button>
-        <button id="tab-practice" class="btn tab">PRACTICE</button>
-        <span class="push tabright">
+        <div class="brand">RT<span>-01</span></div>
+        <div class="tabs">
+          <button id="tab-trainer" class="btn tab">TRAINER</button>
+          <button id="tab-practice" class="btn tab">PRACTICE</button>
+        </div>
+        <span class="push topright">
           <button id="install" class="btn small" hidden>INSTALL</button>
-          <label class="check" title="Smallest audio buffer. Untick if you hear crackles."><input id="lowLatency" type="checkbox" /> LOW LATENCY</label>
-          <span id="outlat" class="outlat" title="Audio output delay reported by the browser">OUT --</span>
+          <button id="update" class="btn small" title="Back up data, rebuild from the latest code, reinstall" hidden>UPDATE</button>
+          <button id="cog" class="btn small icon" title="Settings">
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M6.9 1h2.2l.3 1.9 1.3.6 1.6-1.1 1.6 1.6-1.1 1.6.6 1.3 1.9.3v2.2l-1.9.3-.6 1.3 1.1 1.6-1.6 1.6-1.6-1.1-1.3.6-.3 1.9H6.9l-.3-1.9-1.3-.6-1.6 1.1-1.6-1.6 1.1-1.6-.6-1.3L1 9.1V6.9l1.9-.3.6-1.3-1.1-1.6 1.6-1.6 1.6 1.1 1.3-.6zM8 5.6a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8z" fill-rule="evenodd" />
+            </svg>
+          </button>
           <span id="midi" class="midiled">MIDI</span>
         </span>
       </div>
 
       <div id="view-trainer">
+        <div id="settingsPanel" class="panel settings" hidden>
+          <div class="btnrow">
+            <label title="Subtracted from every hit">LATENCY <input id="latency" type="number" /> MS</label>
+            <button id="cal" class="btn small">CALIBRATE</button>
+            <button id="lag" class="btn small" title="Measure the delay from hitting a pad or key to hearing the sound">LAG TEST</button>
+            <button id="hearFirst" class="toggle" title="Play the pattern once before the count-in">HEAR FIRST</button>
+            <button id="lowLatency" class="toggle" title="Smallest audio buffer. Turn off if you hear crackles.">LOW LATENCY</button>
+            <span id="outlat" class="outlat push" title="Audio output delay reported by the browser">OUT --</span>
+          </div>
+          <div class="lcdline"><div id="testStatus1"></div><div id="testStatus2"></div></div>
+        </div>
+
         <div class="panel source">
           <span id="srcKind" class="srckind"></span>
           <span id="srcName" class="srcname"></span>
           <button id="new" class="btn small">NEW</button>
+          <button id="load" class="btn small">LOAD</button>
           <button id="save" class="btn small">SAVE</button>
           <button id="exit" class="btn small">EXIT</button>
         </div>
 
         <div class="panel controls">
           <label>BPM <input id="bpm" type="number" /></label>
+          <label title="Pattern length in bars">LENGTH <input id="length" type="number" /></label>
+          <label title="Bars to play in TEST">BARS <input id="bars" type="number" /></label>
           <label>COUNT-IN <input id="countIn" type="number" /></label>
-          <label>BARS <input id="bars" type="number" /></label>
-          <label title="Subtracted from every hit">LATENCY <input id="latency" type="number" /> MS</label>
-          <label class="check"><input id="metronome" type="checkbox" /> METRONOME</label>
-          <label class="check" title="One bar of the pattern before the count-in"><input id="hearFirst" type="checkbox" /> HEAR FIRST</label>
-          <label class="check"><input id="sounds" type="checkbox" /> SOUNDS</label>
+          <span class="push toggles">
+            <button id="metronome" class="toggle" title="Metronome">
+              <svg viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M6 1.5h4l3 13H3z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" />
+                <path d="M3.6 11.5h8.8" stroke="currentColor" stroke-width="1.2" />
+                <path d="M8 11.5 11.5 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+                <circle cx="10.4" cy="5.6" r="1.1" fill="currentColor" />
+              </svg>
+            </button>
+            <button id="sounds" class="toggle" title="Drum sounds when you hit a pad or key">
+              <svg viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M2 6h3l4-3.5v11L5 10H2z" fill="currentColor" />
+                <path d="M11 5.5a3.5 3.5 0 0 1 0 5M12.8 3.6a6 6 0 0 1 0 8.8" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
+              </svg>
+            </button>
+          </span>
         </div>
 
         <div class="panel transport">
+          <button id="test" class="btn test">TEST</button>
           <button id="play" class="btn play">PLAY</button>
-          <button id="preview" class="btn">PREVIEW</button>
-          <button id="clear" class="btn">CLEAR</button>
-          <button id="cal" class="btn">CALIBRATE</button>
-          <button id="lag" class="btn" title="Measure the delay from hitting a pad or key to hearing the sound">LAG TEST</button>
+          <span id="status" class="status"></span>
           <span class="nav">
             <button id="replay" class="btn">REPLAY</button>
             <button id="prev" class="btn small" title="Previous bar">&#9668;</button>
@@ -60,20 +86,13 @@
         </div>
 
         <div class="panel gridwrap">
+          <div id="pages" class="pages" hidden></div>
           <div id="grid" class="grid"></div>
-          <div class="legend">
-            <span><i class="mk good"></i>&le;20MS</span>
-            <span><i class="mk ok"></i>&le;45MS</span>
-            <span><i class="mk bad"></i>&gt;45MS</span>
-            <span><i class="mk extra"></i>EXTRA</span>
-            <span><i class="missbox"></i>MISSED</span>
-          </div>
         </div>
 
         <div class="panel rollwrap">
           <div class="btnrow rollbar">
-            <span class="coltitle">KEYS</span>
-            <button id="pianoMute" class="btn tiny mute" title="Mute the keyboard part">M</button>
+            <button id="pianoLed" class="lbl keyslbl" title="Click to mute">KEYS</button>
             <button id="pianoClear" class="btn small">CLEAR</button>
             <button id="pianoToggle" class="btn small push"></button>
           </div>

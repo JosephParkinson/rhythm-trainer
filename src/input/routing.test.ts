@@ -11,23 +11,28 @@ test('defaults: GM drum notes on the drum channel play drums', () => {
   expect(routeNote(s, 42, PADS)).toEqual({ to: 'drum', track: 2 });
 });
 
-test('the same note number from the keys plays piano, not a drum', () => {
-  expect(routeNote(defaultSettings(), 36, KEYS)).toEqual({ to: 'piano' });
+test('a note assigned to a drum plays the drum on any channel, never the piano', () => {
+  const s = defaultSettings(); // bindings learned on channel 10
+  expect(routeNote(s, 36, KEYS)).toEqual({ to: 'drum', track: 0 });
+  expect(routeNote(s, 38, 3)).toEqual({ to: 'drum', track: 1 });
 });
 
-test('unbound pads on a drum channel are ignored instead of playing piano', () => {
+test('an exact note+channel binding wins over a note-only match', () => {
+  const s = { ...defaultSettings(), notes: [36, 36, null, null], noteChannels: [PADS, KEYS, null, null] };
+  expect(routeNote(s, 36, KEYS)).toEqual({ to: 'drum', track: 1 });
+  expect(routeNote(s, 36, PADS)).toEqual({ to: 'drum', track: 0 });
+});
+
+test('unassigned pads on a drum channel are ignored instead of playing piano', () => {
   expect(routeNote(defaultSettings(), 37, PADS)).toEqual({ to: 'ignore' });
 });
 
-test('a binding learned without a channel matches any channel', () => {
-  const s = { ...defaultSettings(), notes: [60, null, null, null], noteChannels: [null, null, null, null] };
-  expect(routeNote(s, 60, KEYS)).toEqual({ to: 'drum', track: 0 });
-  expect(routeNote(s, 61, KEYS)).toEqual({ to: 'piano' });
+test('unassigned notes on other channels play the piano', () => {
+  expect(routeNote(defaultSettings(), 60, KEYS)).toEqual({ to: 'piano' });
 });
 
-test('pads learned on channel 1 claim channel 1, so other keys there are ignored', () => {
+test('pads and keys sharing channel 1: assigned pads play drums, the rest stay piano', () => {
   const s = { ...defaultSettings(), notes: [48, 50, null, null], noteChannels: [KEYS, KEYS, null, null] };
   expect(routeNote(s, 48, KEYS)).toEqual({ to: 'drum', track: 0 });
-  expect(routeNote(s, 60, KEYS)).toEqual({ to: 'ignore' });
-  expect(routeNote(s, 60, 1)).toEqual({ to: 'piano' });
+  expect(routeNote(s, 60, KEYS)).toEqual({ to: 'piano' });
 });

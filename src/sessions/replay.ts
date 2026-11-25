@@ -1,7 +1,7 @@
 import { Scheduler, playClickStep, playPianoStep } from '../audio/scheduler';
 import { barRefs, type RunResult } from '../plan';
 import type { Hit } from '../scoring';
-import { STEPS, TRACKS } from '../settings';
+import { STEPS, TRACKS, patternSteps } from '../settings';
 import type { Deps, Session } from './session';
 
 const LEAD_IN = 0.3;
@@ -47,7 +47,8 @@ export class ReplaySession implements Session {
 
     for (let k = first.seg; k <= last.seg; k++) {
       const take = result.takes[k];
-      const { click, piano } = result.plan.segments[k];
+      const { click, piano, pattern } = result.plan.segments[k];
+      const len = patternSteps(pattern);
       const byStep = new Map<number, Hit[]>();
       for (const h of take.hits) byStep.set(h.step, [...(byStep.get(h.step) ?? []), h]);
 
@@ -56,7 +57,7 @@ export class ReplaySession implements Session {
       const start = t - from * take.stepDur;
       const sched = new Scheduler(eng, start, take.stepDur, from, to, (step, time) => {
         playClickStep(eng, click, step % STEPS, time);
-        if (!d.settings.pianoMuted) playPianoStep(eng, piano, step % STEPS, time, take.stepDur);
+        if (!d.settings.pianoMuted) playPianoStep(eng, piano, step % len, time, take.stepDur);
         for (const h of byStep.get(step) ?? []) {
           if (!d.settings.muted[h.track]) eng.schedule(TRACKS[h.track].voice, time + h.err / 1000, h.vel);
         }

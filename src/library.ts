@@ -1,11 +1,12 @@
 import {
-  TRACKS,
   clampSetting,
   cloneGrid,
   defaultClick,
   clonePiano,
   isGrid,
+  isPatternGrid,
   newId,
+  patternSteps,
   sanitizePiano,
   type ClickPattern,
   type KeyValueStore,
@@ -63,14 +64,14 @@ export function sanitizeLibrary(raw: unknown): LibraryData {
   const folderIds = new Set(folders.map((f) => f.id));
 
   const patterns = list(r.patterns)
-    .filter((p) => isStr(p.id) && isStr(p.name) && isGrid(p.grid, TRACKS.length))
+    .filter((p) => isStr(p.id) && isStr(p.name) && isPatternGrid(p.grid))
     .map((p) => ({
       id: p.id as string,
       name: p.name as string,
       folderId: isStr(p.folderId) && folderIds.has(p.folderId) ? p.folderId : null,
       bpm: clampSetting('bpm', Number(p.bpm), 90),
       grid: p.grid as Pattern,
-      piano: sanitizePiano(p.piano),
+      piano: sanitizePiano(p.piano, patternSteps(p.grid as Pattern)),
     }));
   const patternIds = new Set(patterns.map((p) => p.id));
 

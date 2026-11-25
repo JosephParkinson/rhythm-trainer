@@ -4,6 +4,8 @@ import type { Voice } from './audio/engine';
 export const STEPS = 16;
 export const STEPS_PER_BEAT = 4;
 export const BEATS_PER_BAR = STEPS / STEPS_PER_BEAT;
+/** Patterns are 1 to 4 bars long. */
+export const MAX_PATTERN_BARS = 4;
 
 export interface Track {
   name: string;
@@ -17,8 +19,11 @@ export const TRACKS: readonly Track[] = [
   { name: 'OH', voice: 'openhat' },
 ];
 
-/** pattern[track][step] */
+/** pattern[track][step]; each row is STEPS × (1–4 bars) long */
 export type Pattern = boolean[][];
+
+export const patternSteps = (p: Pattern) => p[0]?.length ?? STEPS;
+export const patternBars = (p: Pattern) => Math.max(1, Math.round(patternSteps(p) / STEPS));
 
 /** A drawn keyboard note: MIDI pitch, start step and length in 16ths (within one bar). */
 export interface PianoNote {
@@ -81,7 +86,24 @@ export type NumberSetting = keyof typeof NUMBER_LIMITS;
 
 const row = (on: number[] = []) => Array.from({ length: STEPS }, (_, i) => on.includes(i));
 
-export const emptyPattern = (): Pattern => TRACKS.map(() => row());
+export const emptyPattern = (bars = 1): Pattern => TRACKS.map(() => Array<boolean>(bars * STEPS).fill(false));
+
+/** New length in bars. Growing repeats the existing bars; shrinking drops the end. */
+export function resizePattern(p: Pattern, bars: number): Pattern {
+  const n = bars * STEPS;
+  return p.map((r) => Array.from({ length: n }, (_, i) => r[i % r.length]));
+}
+
+/** Matches resizePattern: notes in repeated bars are copied, notes past the end dropped. */
+export function resizePiano(notes: readonly PianoNote[], fromBars: number, toBars: number): PianoNote[] {
+  const out: PianoNote[] = [];
+  for (let bar = 0; bar < toBars; bar++) {
+    for (const n of notes) {
+      if (Math.floor(n.step / STEPS) === bar % fromBars) out.push({ ...n, step: (n.step % STEPS) + bar * STEPS });
+    }
+  }
+  return out;
+}
 export const defaultClick = (): ClickPattern => [row([0]), row([4, 8, 12])];
 export const emptyClick = (): ClickPattern => [row(), row()];
 export const cloneGrid = (g: boolean[][]) => g.map((r) => [...r]);
@@ -92,8 +114,8 @@ export const samePiano = (a: readonly PianoNote[], b: readonly PianoNote[]) => {
   return a.length === b.length && b.every((n) => sa.has(key(n)));
 };
 
-/** Keeps only well-formed notes inside the roll's range and one bar. */
-export function sanitizePiano(raw: unknown): PianoNote[] {
+/** Keeps only well-formed notes inside the roll's range that don't cross a bar line. */
+export function sanitizePiano(raw: unknown, steps = MAX_PATTERN_BARS * STEPS): PianoNote[] {
   if (!Array.isArray(raw)) return [];
   return raw
     .filter((n): n is PianoNote => !!n && typeof n === 'object')
@@ -101,8 +123,8 @@ export function sanitizePiano(raw: unknown): PianoNote[] {
     .filter(
       (n) =>
         Number.isInteger(n.pitch) && n.pitch >= PIANO_LOW && n.pitch <= PIANO_HIGH &&
-        Number.isInteger(n.step) && n.step >= 0 && n.step < STEPS &&
-        Number.isInteger(n.len) && n.len >= 1 && n.step + n.len <= STEPS,
+        Number.isInteger(n.step) && n.step >= 0 && n.step < steps &&
+        Number.isInteger(n.len) && n.len >= 1 && (n.step % STEPS) + n.len <= STEPS,
     );
 }
 export const sameGrid = (a: boolean[][], b: boolean[][]) => a.every((r, i) => r.every((v, j) => v === b[i]?.[j]));
@@ -139,9 +161,17 @@ export function clampSetting(id: NumberSetting, value: number, fallback: number)
 export const isArrayOf = <T>(x: unknown, len: number, ok: (v: unknown) => boolean): x is T[] =>
   Array.isArray(x) && x.length === len && x.every(ok);
 
-/** A boolean grid with `rows` rows of STEPS steps. */
+/** A boolean grid with `rows` rows of STEPS steps (one bar, e.g. a click track). */
 export const isGrid = (x: unknown, rows: number): x is boolean[][] =>
   isArrayOf(x, rows, (r) => isArrayOf(r, STEPS, (b) => typeof b === 'boolean'));
+
+/** A drum pattern: one row per track, all 1–4 bars long. */
+export function isPatternGrid(x: unknown): x is Pattern {
+  if (!Array.isArray(x) || x.length !== TRACKS.length || !Array.isArray(x[0])) return false;
+  const len = x[0].length;
+  if (len % STEPS || len < STEPS || len > MAX_PATTERN_BARS * STEPS) return false;
+  return x.every((r) => isArrayOf(r, len, (b) => typeof b === 'boolean'));
+}
 
 /** Builds settings from untrusted stored data, keeping defaults for anything missing or malformed. */
 export function sanitize(raw: unknown): Settings {
@@ -162,8 +192,8 @@ export function sanitize(raw: unknown): Settings {
   if (isArrayOf<number | null>(r.noteChannels, TRACKS.length, (c) => c === null || (Number.isInteger(c) && (c as number) >= 0 && (c as number) < 16))) {
     s.noteChannels = r.noteChannels;
   }
-  if (isGrid(r.pattern, TRACKS.length)) s.pattern = r.pattern;
-  s.piano = sanitizePiano(r.piano);
+  if (isPatternGrid(r.pattern)) s.pattern = r.pattern;
+  s.piano = sanitizePiano(r.piano, patternSteps(s.pattern));
   if (isArrayOf<boolean>(r.muted, TRACKS.length, (b) => typeof b === 'boolean')) s.muted = r.muted;
   if (typeof r.patternId === 'string') s.patternId = r.patternId;
   return s;
