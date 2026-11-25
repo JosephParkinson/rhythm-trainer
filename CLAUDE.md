@@ -43,6 +43,7 @@ Icons are rendered from `public/icon.svg` into `public/icon-*.png`, `public/appl
 Details:
 - Run it with `npm run update:mac`, or with the UPDATE button.
 - On failure the old app is left in place and reopened. The log is in `~/Library/Logs/Rhythm Trainer/update.log`.
+- `npm install` and the electron-builder step each get one retry (after clearing the old build output), because on macOS they sometimes fail once with ENOTEMPTY and then succeed. The new app is copied in beside the old one before the old one is deleted.
 - The script's body is a `main()` function, so bash has read all of it before `git pull` can change the file.
 - The button (`src/desktop.ts`) talks to the wrapper through `electron/preload.cjs` (`window.desktop`). It only shows on macOS when the build recorded `repoPath`, which `dist:mac` and the script pass via `-c.extraMetadata.repoPath`.
 - The main process launches the script through a login zsh to pick up the user's PATH, and runs it detached so it outlives the app.

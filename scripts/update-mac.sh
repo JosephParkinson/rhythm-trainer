@@ -45,19 +45,30 @@ main() {
   # 3–4. Latest code, then build just this Mac's architecture as a plain .app (no .dmg needed).
   cd "$repo"
   git pull --ff-only
-  npm install --no-audit --no-fund
-  local arch
+  local arch out
   arch=$([ "$(uname -m)" = arm64 ] && echo arm64 || echo x64)
-  npm run build
-  npx electron-builder --mac dir "--$arch" -c.extraMetadata.repoPath="$repo"
+  out="release/$([ "$arch" = arm64 ] && echo mac-arm64 || echo mac)"
 
-  local built
-  built="release/$([ "$arch" = arm64 ] && echo mac-arm64 || echo mac)/$app_name.app"
+  # npm and electron-builder sometimes fail with ENOTEMPTY when macOS (Spotlight,
+  # Finder) is still holding files from the last run; a second try works, so
+  # each step gets one retry after clearing what it was replacing.
+  npm install --no-audit --no-fund \
+    || { echo "-- npm install failed, retrying"; sleep 3; npm install --no-audit --no-fund; }
+  npm run build
+  local builder=(npx electron-builder --mac dir "--$arch" -c.extraMetadata.repoPath="$repo")
+  rm -rf "$out" || { sleep 3; rm -rf "$out"; }
+  "${builder[@]}" \
+    || { echo "-- app build failed, retrying"; sleep 3; rm -rf "$out"; "${builder[@]}"; }
+
+  local built="$out/$app_name.app"
   [ -d "$built" ] || { echo "Built app not found at $built"; false; }
 
   # 5. Replace the installed app only now that the new one exists.
-  rm -rf "$app"
-  ditto "$built" "$app"
+  # Copy next to it first, so a failed delete can't leave a half-installed app.
+  rm -rf "$app.new"
+  ditto "$built" "$app.new"
+  rm -rf "$app" || { sleep 3; rm -rf "$app"; }
+  mv "$app.new" "$app"
   echo "Installed $(git rev-parse --short HEAD)"
 
   # 6. Reopen.
