@@ -1,6 +1,13 @@
 # RT-01
 
-A finger-drumming rhythm trainer. Program a pattern of 1–4 bars, play it on your computer keyboard or a MIDI pad controller against a metronome, and see every hit scored against the grid in milliseconds. Save patterns into folders, chain them into routines, and track improvements over time.
+A rhythm trainer, taught via finger drumming. 
+Program a pattern of 1–4 bars and test yourself against it on your computer keyboard or a MIDI pad controller. See every hit scored against the grid in milliseconds. Save patterns into folders, chain them into routines, and track improvements over time.
+
+- Allows freedom to practice any pattern you like:
+     - drills to practice simple quarter, 8th or 16th notes. Useful for any instrument
+     - full drum patterns if you want to practice finger drumming
+- build your own practice routines, made by chaining together patterns you've saved
+- review progress over time, and see your timing & rhythm measurably improve 
 
 ## Install on a Mac
 
@@ -109,5 +116,3 @@ npm run dev     # dev server in the browser
 npm test        # unit tests
 npm run build   # typecheck + production build
 ```
-
-See [CLAUDE.md](CLAUDE.md) for the architecture and the other build targets (Windows, web app).
