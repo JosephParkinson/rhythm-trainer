@@ -1,7 +1,8 @@
-import { STEPS, STEPS_PER_BEAT, TRACKS, patternSteps, type Pattern } from './settings';
+import { STEPS, STEPS_PER_BEAT, TRACKS, patternSteps, type Pattern } from './pattern';
 
-export const GOOD_MS = 20;
-export const OK_MS = 45;
+/** Grading thresholds, ms either side of the grid. */
+const GOOD_MS = 20;
+const OK_MS = 45;
 
 export interface Hit {
   track: number;
@@ -58,7 +59,7 @@ export class Take {
 
 export type Grade = 'good' | 'ok' | 'bad' | 'extra';
 
-export const gradeErr = (err: number): Grade =>
+const gradeErr = (err: number): Grade =>
   Math.abs(err) <= GOOD_MS ? 'good' : Math.abs(err) <= OK_MS ? 'ok' : 'bad';
 
 const closest = (hits: readonly Hit[]) =>
@@ -146,4 +147,5 @@ export function summarize(samples: Sample[]): TimingStats {
   };
 }
 
+/** Stats for one take. */
 export const timing = (take: Take, pattern: Pattern, f?: CellFilter) => summarize([collect(take, pattern, f)]);

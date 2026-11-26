@@ -1,8 +1,8 @@
-import { PIANO_HIGH, PIANO_LOW, STEPS, STEPS_PER_BEAT, type PianoNote } from '../settings';
+import { PIANO_HIGH, PIANO_LOW, STEPS, STEPS_PER_BEAT, type PianoNote } from '../core/pattern';
 import { el } from './dom';
 
 export interface PianoRollEvents {
-  /** the notes were edited (the array passed to setNotes has been replaced) */
+  /** the notes were edited; `notes` is the complete new set */
   change(notes: PianoNote[]): void;
   /** a note was placed: play it so you hear what you drew */
   audition(pitch: number): void;
@@ -12,7 +12,7 @@ const NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 const BLACK = new Set([1, 3, 6, 8, 10]);
 const FLASH_MS = 120;
 
-export const noteName = (pitch: number) => `${NAMES[pitch % 12]}${Math.floor(pitch / 12) - 1}`;
+const noteName = (pitch: number) => `${NAMES[pitch % 12]}${Math.floor(pitch / 12) - 1}`;
 
 /**
  * Two-octave piano roll under the drum grid, with columns aligned to its steps.

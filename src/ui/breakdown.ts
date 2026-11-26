@@ -1,7 +1,7 @@
-import { summariseRun } from '../history';
-import type { RunResult } from '../plan';
-import type { TimingStats } from '../scoring';
-import { TRACKS } from '../settings';
+import { summariseRun } from '../core/history';
+import { TRACKS } from '../core/pattern';
+import type { RunResult } from '../core/plan';
+import type { TimingStats } from '../core/scoring';
 import { STAT_COLUMNS, statCells } from './format';
 import { table } from './table';
 import { button, heading } from './widgets';
@@ -91,7 +91,7 @@ export class Breakdown {
     });
   }
 
-  /** Locks the ▶ buttons and row clicks (e.g. during a preview or calibration). */
+  /** Locks the ▶ buttons and row clicks (while another session runs). */
   setLocked(locked: boolean) {
     this.playButtons.forEach((b) => (b.disabled = locked));
     this.segRows.forEach((tr) => tr.classList.toggle('locked', locked));

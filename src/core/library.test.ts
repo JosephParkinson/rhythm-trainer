@@ -1,19 +1,7 @@
 import { beforeEach, describe, expect, test } from 'vitest';
-import { History, withMetronome } from './history';
 import { Library, sanitizeLibrary } from './library';
-import { editorPlan, routinePlan, barRefs, type RunResult } from './plan';
-import { Take } from './scoring';
-import { defaultSettings, emptyPattern, type KeyValueStore } from './settings';
-
-class MemoryStore implements KeyValueStore {
-  data = new Map<string, string>();
-  getItem(k: string) {
-    return this.data.get(k) ?? null;
-  }
-  setItem(k: string, v: string) {
-    this.data.set(k, v);
-  }
-}
+import { emptyPattern } from './pattern';
+import { MemoryStore } from './storage';
 
 let store: MemoryStore;
 let lib: Library;
@@ -113,59 +101,4 @@ test('sanitizeLibrary drops malformed and dangling entries', () => {
   expect(data.folders).toHaveLength(1);
   expect(data.patterns).toEqual([expect.objectContaining({ id: 'p', folderId: null, bpm: 240 })]);
   expect(data.routines[0].items).toEqual([expect.objectContaining({ patternId: 'p', bars: 1, click: expect.any(Array) })]);
-});
-
-describe('plans and history', () => {
-  test('routine plan copies patterns and skips none; bar refs span segments', () => {
-    const a = lib.savePattern({ name: 'A', folderId: null, bpm: 80, grid: grid() });
-    const r = lib.addRoutine('R');
-    lib.addItem(r.id, a.id);
-    lib.addItem(r.id, a.id);
-    lib.updateItem(r.id, 1, { bars: 2 });
-    const plan = routinePlan(lib.routine(r.id)!, lib, { ...defaultSettings(), hearFirst: true, countIn: 2 });
-    expect(plan.segments.map((s) => s.bars)).toEqual([4, 2]);
-    expect(plan.segments[0].pattern).not.toBe(lib.pattern(a.id)!.grid);
-    expect(plan).toMatchObject({ hearFirst: true, countIn: 2 });
-
-    const result: RunResult = { plan, takes: [new Take(0, 0.1, 4), new Take(2, 0.1, 2)] };
-    expect(barRefs(result).at(-1)).toEqual({ seg: 1, bar: 1 });
-    expect(barRefs(result)).toHaveLength(6);
-  });
-
-  test('editor plan shares the editor pattern and maps metronome to the click', () => {
-    const s = { ...defaultSettings(), metronome: false };
-    const plan = editorPlan(s, 'X');
-    expect(plan.segments[0].pattern).toBe(s.pattern);
-    expect(plan.segments[0].click.flat().some(Boolean)).toBe(false);
-  });
-
-  test('history records summaries per run and filters by ref', () => {
-    const h = new History(store);
-    const s = defaultSettings();
-    const plan = editorPlan(s, 'X');
-    const take = new Take(0, 0.1, 1);
-    take.record(0, 0.01, 1); // kick on step 0, +10ms
-    h.add('pattern', 'p1', { plan, takes: [take] }, 1000);
-    h.add('pattern', 'p2', { plan, takes: [take] }, 2000);
-
-    const recs = new History(store).for('pattern', 'p1');
-    expect(recs).toHaveLength(1);
-    expect(recs[0].total).toMatchObject({ hit: 1, avg: 10 });
-    expect(recs[0].tracks[0]).toMatchObject({ notes: 2, hit: 1 });
-    expect(recs[0].subs[0].notes).toBeGreaterThan(0);
-
-    h.remove('pattern', 'p1');
-    expect(h.for('pattern', 'p1')).toHaveLength(0);
-    expect(h.for('pattern', 'p2')).toHaveLength(1);
-  });
-
-  test('history records whether the metronome was on; old records count as on', () => {
-    const h = new History(store);
-    const take = new Take(0, 0.1, 1);
-    h.add('pattern', 'm', { plan: editorPlan({ ...defaultSettings(), metronome: true }, 'X'), takes: [take] });
-    h.add('pattern', 'm', { plan: editorPlan({ ...defaultSettings(), metronome: false }, 'X'), takes: [take] });
-    expect(h.for('pattern', 'm').map(withMetronome)).toEqual([true, false]);
-    const { metronome: _, ...old } = h.for('pattern', 'm')[1];
-    expect(withMetronome(old)).toBe(true);
-  });
 });

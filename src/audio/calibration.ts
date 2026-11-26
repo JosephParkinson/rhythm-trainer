@@ -1,6 +1,6 @@
 import { findRoundTrip, median, msStats, onset, prepare, toneOnsets, type Recording } from './analysis';
 import type { Engine } from './engine';
-import { openMic, startRecorder, type Recorder } from './recorder';
+import { poll, withMicRecording } from './recorder';
 
 /*
  * Mic-based input-latency calibration.
@@ -44,28 +44,22 @@ export class Calibration {
 
   async run(onTick: (listening: boolean, taps: number) => void): Promise<CalResult> {
     const ctx = this.eng.ctx;
-    const stream = await openMic();
-    let rec: Recorder | null = null;
     try {
-      rec = await startRecorder(ctx, stream);
-      if (this.cancelled) throw new Error('CANCELLED');
-
-      const t0 = ctx.currentTime + 0.5;
-      const clicks = Array.from({ length: INTRO + CAL_TAPS }, (_, k) => t0 + k * BEAT);
-      clicks.forEach((t) => this.eng.calClick(t));
-      const end = clicks[clicks.length - 1] + BEAT + TAIL;
-
-      while (ctx.currentTime < end) {
+      return await withMicRecording(ctx, async (rec) => {
         if (this.cancelled) throw new Error('CANCELLED');
-        const now = this.eng.heardTime(performance.now());
-        onTick(now < t0 + (INTRO - 1) * BEAT, tapsByClick(this.taps, clicks).size);
-        await new Promise((r) => setTimeout(r, 50));
-      }
-      return analyseCalibration(rec.finish(), clicks, tapsByClick(this.taps, clicks));
+        const t0 = ctx.currentTime + 0.5;
+        const clicks = Array.from({ length: INTRO + CAL_TAPS }, (_, k) => t0 + k * BEAT);
+        clicks.forEach((t) => this.eng.calClick(t));
+        const end = clicks[clicks.length - 1] + BEAT + TAIL;
+        while (ctx.currentTime < end) {
+          const now = this.eng.heardTime(performance.now());
+          onTick(now < t0 + (INTRO - 1) * BEAT, tapsByClick(this.taps, clicks).size);
+          await poll(() => this.cancelled);
+        }
+        return analyseCalibration(rec.finish(), clicks, tapsByClick(this.taps, clicks));
+      });
     } finally {
-      rec?.dispose();
       this.eng.cancelScheduled();
-      stream.getTracks().forEach((t) => t.stop());
     }
   }
 }

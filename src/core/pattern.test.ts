@@ -1,56 +1,15 @@
 import { expect, test } from 'vitest';
 import {
   STEPS,
-  clampSetting,
-  defaultSettings,
   emptyPattern,
+  hasContentFrom,
   isPatternGrid,
-  patternBars,
   resizePattern,
   resizePiano,
+  sameGrid,
   samePiano,
-  sanitize,
   sanitizePiano,
-} from './settings';
-
-test('garbage falls back to defaults', () => {
-  expect(sanitize(null)).toEqual(defaultSettings());
-  expect(sanitize('nope')).toEqual(defaultSettings());
-});
-
-test('keeps valid fields, clamps numbers, drops malformed ones', () => {
-  const pattern = Array.from({ length: 4 }, () => Array<boolean>(STEPS).fill(true));
-  const s = sanitize({
-    bpm: 999,
-    bars: 2.6,
-    sounds: false,
-    keys: ['q', 'w', '', 'r'],
-    notes: [36, 'x', 42, 46],
-    pattern,
-    extra: 'ignored',
-  });
-  expect(s.bpm).toBe(240);
-  expect(s.bars).toBe(3);
-  expect(s.sounds).toBe(false);
-  expect(s.keys).toEqual(['q', 'w', '', 'r']);
-  expect(s.notes).toEqual(defaultSettings().notes);
-  expect(s.pattern).toEqual(pattern);
-  expect(s).not.toHaveProperty('extra');
-});
-
-test('rejects a pattern of the wrong shape', () => {
-  expect(sanitize({ pattern: [[true]] }).pattern).toEqual(defaultSettings().pattern);
-});
-
-test('clampSetting', () => {
-  expect(clampSetting('latency', -500, 0)).toBe(-200);
-  expect(clampSetting('latency', NaN, 7)).toBe(7);
-});
-
-test('muted keeps a valid per-track mask only', () => {
-  expect(sanitize({ muted: [true, false, false, true] }).muted).toEqual([true, false, false, true]);
-  expect(sanitize({ muted: [true] }).muted).toEqual([false, false, false, false]);
-});
+} from './pattern';
 
 test('piano notes: keeps valid ones inside the range and the bar', () => {
   expect(
@@ -62,7 +21,6 @@ test('piano notes: keeps valid ones inside the range and the bar', () => {
       'junk',
     ]),
   ).toEqual([{ pitch: 60, step: 0, len: 4 }]);
-  expect(sanitize({ piano: 'nope' }).piano).toEqual([]);
 });
 
 test('samePiano ignores order', () => {
@@ -71,18 +29,11 @@ test('samePiano ignores order', () => {
   expect(samePiano(a, a.slice(1))).toBe(false);
 });
 
-test('note channels: valid mask kept, defaults to the GM drum channel', () => {
-  expect(defaultSettings().noteChannels).toEqual([9, 9, 9, 9]);
-  expect(sanitize({ noteChannels: [0, null, 15, 9] }).noteChannels).toEqual([0, null, 15, 9]);
-  expect(sanitize({ noteChannels: [16, 0, 0, 0] }).noteChannels).toEqual([9, 9, 9, 9]);
-});
-
 test('patterns can be 1 to 4 bars', () => {
   expect(isPatternGrid(emptyPattern(1))).toBe(true);
   expect(isPatternGrid(emptyPattern(4))).toBe(true);
   expect(isPatternGrid(emptyPattern(5))).toBe(false);
   expect(isPatternGrid([[true]])).toBe(false);
-  expect(patternBars(sanitize({ pattern: emptyPattern(3) }).pattern)).toBe(3);
 });
 
 test('resizing repeats bars when growing and drops them when shrinking', () => {
@@ -102,4 +53,18 @@ test('piano notes may sit in later bars but not cross a bar line', () => {
   expect(sanitizePiano([{ pitch: 60, step: 30, len: 2 }], 32)).toHaveLength(1);
   expect(sanitizePiano([{ pitch: 60, step: 14, len: 4 }], 32)).toHaveLength(0);
   expect(sanitizePiano([{ pitch: 60, step: 40, len: 1 }], 32)).toHaveLength(0);
+});
+
+test('sameGrid compares length as well as steps', () => {
+  const one = emptyPattern(1);
+  expect(sameGrid(one, emptyPattern(1))).toBe(true);
+  expect(sameGrid(one, emptyPattern(2))).toBe(false);
+});
+
+test('hasContentFrom looks at drums and keyboard notes from a step on', () => {
+  const p = emptyPattern(2);
+  expect(hasContentFrom(p, [], STEPS)).toBe(false);
+  expect(hasContentFrom(p, [{ pitch: 60, step: 20, len: 1 }], STEPS)).toBe(true);
+  p[1][STEPS + 3] = true;
+  expect(hasContentFrom(p, [], STEPS)).toBe(true);
 });

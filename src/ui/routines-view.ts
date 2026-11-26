@@ -1,6 +1,7 @@
-import type { History } from '../history';
-import type { Library, Routine } from '../library';
-import { CLICK_ROWS, clampSetting, cloneGrid, defaultClick, emptyClick } from '../settings';
+import type { History } from '../core/history';
+import type { Library, Routine } from '../core/library';
+import { CLICK_ROWS, cloneGrid, defaultClick, emptyClick } from '../core/pattern';
+import { clampSetting } from '../core/settings';
 import { confirmBox, promptText } from './dialog';
 import { el } from './dom';
 import { renderHistory } from './history-view';

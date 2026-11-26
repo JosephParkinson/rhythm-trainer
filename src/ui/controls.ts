@@ -1,18 +1,20 @@
-import { NUMBER_LIMITS, clampSetting, type NumberSetting, type Settings } from '../settings';
+import { NUMBER_LIMITS, clampSetting, type FlagSetting, type NumberSetting, type Settings } from '../core/settings';
 import { $ } from './dom';
 
 export type Mode = 'idle' | 'test' | 'play' | 'replay' | 'cal' | 'lag';
 export type ActiveMode = Exclude<Mode, 'idle'>;
-const TOGGLES = ['metronome', 'sounds', 'muteOnTest', 'hearFirst', 'lowLatency'] as const;
-type ToggleSetting = (typeof TOGGLES)[number];
 
 /** TEST's red light: off, dim while the pattern/count-in plays, lit while you're being recorded. */
-export type RecordState = 'off' | 'lead' | 'rec';
+type RecordState = 'off' | 'lead' | 'rec';
+
+/** On/off settings shown as LED toggles (button id = setting name). */
+const TOGGLES = ['metronome', 'sounds', 'muteOnTest', 'hearFirst', 'lowLatency'] as const satisfies readonly FlagSetting[];
+type ToggleSetting = (typeof TOGGLES)[number];
 
 /** Settings a routine overrides with its own per-pattern values. */
-const PER_PATTERN = new Set(['bpm', 'bars', 'metronome']);
+const PER_PATTERN = new Set<string>(['bpm', 'bars', 'metronome']);
 
-/** Modes with a button (id = mode) that starts and stops them: [idle label, running label]. REPLAY is started from the breakdown. */
+/** Modes with a button (id = mode) that starts and stops them: [idle label, running label]. Replays start from the breakdown. */
 type ButtonMode = Exclude<ActiveMode, 'replay'>;
 const LABELS: Record<ButtonMode, [string, string]> = {
   test: ['TEST', 'STOP'],
@@ -21,19 +23,17 @@ const LABELS: Record<ButtonMode, [string, string]> = {
   lag: ['LAG TEST', 'CANCEL'],
 };
 
-export interface ControlEvents {
+interface ControlEvents {
   toggle(mode: ButtonMode): void;
   /** a setting was edited */
   change(): void;
 }
 
-export interface ControlState {
-  mode: Mode;
-  /** a routine is loaded */
-  routine: boolean;
-}
-
-/** Transport buttons, settings inputs and LED toggles, status readouts and the MIDI light. */
+/**
+ * The transport (TEST, PLAY), the settings row and the settings panel behind
+ * the cog: number inputs, LED toggles, mic test buttons and readouts, plus the
+ * MIDI light.
+ */
 export class Controls {
   private readonly statusEl = $('status');
   private readonly test1 = $('testStatus1');
@@ -64,13 +64,20 @@ export class Controls {
     }
 
     for (const id of TOGGLES) {
-      const b = (this.toggles[id] = $<HTMLButtonElement>(id));
-      b.addEventListener('click', () => {
+      this.toggles[id] = $<HTMLButtonElement>(id);
+      this.toggles[id].addEventListener('click', () => {
         settings[id] = !settings[id];
         this.syncInputs();
         ev.change();
       });
     }
+
+    const cog = $('cog');
+    const panel = $('settingsPanel');
+    cog.addEventListener('click', () => {
+      panel.hidden = !panel.hidden;
+      cog.classList.toggle('lit', !panel.hidden);
+    });
 
     this.syncInputs();
   }
@@ -114,7 +121,8 @@ export class Controls {
     this.midi.title = `${status}\nClick to rescan`;
   }
 
-  update({ mode, routine }: ControlState) {
+  /** While a session runs only its own button works; a loaded routine supplies BPM, BARS and the metronome. */
+  update(mode: Mode, routine: boolean) {
     const busy = mode !== 'idle';
     for (const [m, b] of Object.entries(this.buttons) as [ButtonMode, HTMLButtonElement][]) {
       const active = mode === m;

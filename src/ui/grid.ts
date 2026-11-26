@@ -1,17 +1,19 @@
-import { scoreCell, type Take } from '../scoring';
-import { MAX_PATTERN_BARS, STEPS, STEPS_PER_BEAT, TRACKS, patternBars, patternSteps, type Pattern } from '../settings';
+import { STEPS, STEPS_PER_BEAT, TRACKS, patternBars, patternSteps, type Pattern } from '../core/pattern';
+import { scoreCell, type Take } from '../core/scoring';
+import { BarSquares } from './bar-squares';
 import { el } from './dom';
 import { fmtMs } from './format';
+import { setMuteLight } from './widgets';
 
 export interface GridEvents {
   /** a cell was clicked; `step` is the pattern step (page × 16 + column) */
   toggle(track: number, step: number): void;
   muteClick(track: number): void;
-  /** a bar square inside the pattern was clicked: view that bar */
+  /** a bar square inside the pattern was clicked */
   pageClick(page: number): void;
-  /** a dark square was clicked: extend to that many bars */
+  /** a dark bar square was clicked: extend to that many bars */
   extend(bars: number): void;
-  /** a lit square was double- or right-clicked: delete every bar after it */
+  /** a lit bar square was double- or right-clicked: delete every bar after it */
   cutAfter(page: number): void;
   /** the page shown changed (by click or by following playback) */
   pageChanged(page: number): void;
@@ -20,24 +22,16 @@ export interface GridEvents {
 const FLASH_MS = 90;
 
 /**
- * The step grid shows one bar (page) of the pattern at a time: step LEDs, track
- * rows (label light = mute toggle), cells with hit markers.
- * Four bar squares (in the transport row) show the pattern's length (amber) and
- * the bar on screen (bright), pulse on the beat for the bar PLAY is on, and set the
- * length: click a dark one to extend, double- or right-click a lit one to delete the bars after it.
+ * The step grid. Shows one bar (page) of the pattern at a time: step lights,
+ * track rows (label light = mute switch) and cells with hit markers. Owns the
+ * bar squares, which show and set which page is on screen.
  */
 export class Grid {
   private readonly leds: HTMLElement[] = [];
   private readonly cells: HTMLElement[][] = [];
   private readonly labels: HTMLButtonElement[] = [];
   private readonly flashTimers: number[] = [];
-  private readonly squares: HTMLButtonElement[] = [];
-  private playingPage = -1;
-  private beat = false;
-  private ledsOff = false;
-  private lengthLocked = false;
-  /** the last single click was on a dark square */
-  private clickExtended = false;
+  private readonly squares: BarSquares;
   private muted: readonly boolean[] = [];
   private pattern: Pattern = [];
   private page = 0;
@@ -45,29 +39,23 @@ export class Grid {
 
   constructor(
     root: HTMLElement,
-    pagesRoot: HTMLElement,
+    squaresRoot: HTMLElement,
     private readonly ev: GridEvents,
   ) {
-    for (let p = 0; p < MAX_PATTERN_BARS; p++) {
-      const sq = el('button', 'barsq', pagesRoot);
-      sq.addEventListener('click', (e) => e.detail <= 1 && this.squareClick(p));
-      sq.addEventListener('dblclick', () => !this.clickExtended && this.cutAfter(p));
-      sq.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-        this.cutAfter(p);
-      });
-      this.squares.push(sq);
-    }
+    this.squares = new BarSquares(squaresRoot, {
+      view: (p) => ev.pageClick(p),
+      extend: (bars) => ev.extend(bars),
+      cutAfter: (p) => ev.cutAfter(p),
+    });
 
     el('div', '', root);
     for (let s = 0; s < STEPS; s++) this.leds.push(el('div', 'stepled', root));
 
     TRACKS.forEach((track, t) => {
-      const head = el('div', 'rowhead', root);
-      const label = el('button', 'lbl', head);
+      const label = el('button', 'lbl', el('div', 'rowhead', root));
       label.textContent = track.name;
-      label.title = 'Click to mute';
       label.addEventListener('click', () => ev.muteClick(t));
+      setMuteLight(label, false);
       this.labels.push(label);
 
       this.cells.push(
@@ -92,25 +80,21 @@ export class Grid {
     else this.renderPage();
   }
 
-  /** The bar PLAY is on (-1: none). Its square pulses while `beat` is true. */
-  setPlayingPage(page: number, beat = false) {
-    if (page === this.playingPage && beat === this.beat) return;
-    this.playingPage = page;
-    this.beat = beat;
-    this.renderSquares();
-  }
-
-  /** Lengths can only change while idle with the editor pattern loaded. */
-  setLengthLocked(locked: boolean) {
-    this.lengthLocked = locked;
-    this.renderSquares();
-  }
-
   setPage(page: number) {
     if (page === this.page) return;
     this.page = page;
     this.renderPage();
     this.ev.pageChanged(page);
+  }
+
+  /** The bar PLAY is on (-1: none); its square pulses while `beat`. */
+  setPlayingPage(page: number, beat = false) {
+    this.squares.update({ playing: page, beat });
+  }
+
+  /** The length can only change while idle with the editor pattern loaded. */
+  setLengthLocked(locked: boolean) {
+    this.squares.update({ locked });
   }
 
   /** Draws one cell's hits; `step` is the take's global step. In review, empty targets show as missed. */
@@ -139,18 +123,12 @@ export class Grid {
     }
   }
 
+  /** Removes all hit markers. */
   clear() {
     for (const c of this.cells.flat()) {
       c.classList.remove('miss');
       c.querySelectorAll('.mk').forEach((m) => m.remove());
     }
-  }
-
-  /** Greys out the step lights (TEST without a metronome). */
-  setStepLedsOff(off: boolean) {
-    if (off === this.ledsOff) return;
-    this.ledsOff = off;
-    this.leds.forEach((l) => l.classList.toggle('off', off));
   }
 
   /** Column 0–15 of the current page; -1 hides it. */
@@ -161,6 +139,12 @@ export class Grid {
     this.playhead = step;
   }
 
+  /** Greys out the step lights (TEST without a metronome). */
+  setStepLedsOff(off: boolean) {
+    this.leds.forEach((l) => l.classList.toggle('off', off));
+  }
+
+  /** Flashes a track's light for a live hit. */
   flash(track: number) {
     this.labels[track].classList.add('flash');
     clearTimeout(this.flashTimers[track]);
@@ -170,47 +154,17 @@ export class Grid {
   /** Muted rows: light off, cells dimmed, no hits shown. Redraw the bar afterwards to update markers. */
   setMuted(muted: readonly boolean[]) {
     this.muted = [...muted];
-    this.labels.forEach((b, t) => {
-      b.classList.toggle('muted', !!muted[t]);
-      b.title = muted[t] ? 'Muted. Click to unmute' : 'Click to mute';
-    });
+    this.labels.forEach((b, t) => setMuteLight(b, !!muted[t]));
     this.cells.forEach((row, t) => row.forEach((c) => c.classList.toggle('muted', !!muted[t])));
   }
 
-  /** Mute lights stay clickable while idle or playing. */
   setMuteLocked(locked: boolean) {
     this.labels.forEach((b) => (b.disabled = locked));
-  }
-
-  /** First click of a click or double-click. */
-  private squareClick(p: number) {
-    this.clickExtended = p >= patternBars(this.pattern);
-    if (!this.clickExtended) this.ev.pageClick(p);
-    else if (!this.lengthLocked) this.ev.extend(p + 1);
-  }
-
-  /** Double-click or right-click on a lit square. (A double-click that started on a dark square only extends.) */
-  private cutAfter(p: number) {
-    if (p + 1 < patternBars(this.pattern) && !this.lengthLocked) this.ev.cutAfter(p);
   }
 
   private renderPage() {
     const base = this.page * STEPS;
     this.cells.forEach((row, t) => row.forEach((c, s) => c.classList.toggle('on', !!this.pattern[t]?.[base + s])));
-    this.renderSquares();
-  }
-
-  private renderSquares() {
-    const bars = patternBars(this.pattern);
-    this.squares.forEach((sq, p) => {
-      const inside = p < bars;
-      sq.classList.toggle('in', inside);
-      sq.classList.toggle('cur', p === this.page);
-      sq.classList.toggle('beat', p === this.playingPage && this.beat);
-      sq.disabled = !inside && this.lengthLocked;
-      sq.title = inside
-        ? `Bar ${p + 1}` + (p + 1 < bars && !this.lengthLocked ? `. Double-click or right-click to delete the bar${p + 2 < bars ? 's' : ''} after it` : '')
-        : `Click to extend to ${p + 1} bars`;
-    });
+    this.squares.update({ bars: patternBars(this.pattern), page: this.page });
   }
 }

@@ -1,4 +1,4 @@
-import { TRACKS } from '../settings';
+import { TRACKS } from '../core/pattern';
 import { el } from './dom';
 
 /** Key / MIDI assignment per track, in the settings panel. Click a box, then press a key or pad. */

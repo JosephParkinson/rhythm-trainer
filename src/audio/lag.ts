@@ -1,6 +1,6 @@
 import { envelope, findRoundTrip, median, msStats, onset, prepare, type Recording } from './analysis';
 import type { Engine } from './engine';
-import { openMic, startRecorder, type Recorder } from './recorder';
+import { poll, withMicRecording } from './recorder';
 
 /*
  * Lag test: how long from physically hitting a pad or key to hearing the app's
@@ -50,13 +50,9 @@ export class LagTest {
 
   async run(onTick: (taps: number) => void): Promise<LagResult> {
     const ctx = this.eng.ctx;
-    const stream = await openMic();
-    let rec: Recorder | null = null;
-    try {
-      rec = await startRecorder(ctx, stream);
+    return withMicRecording(ctx, async (rec) => {
       const deadline = ctx.currentTime + TIMEOUT;
       while (true) {
-        if (this.cancelled) throw new Error('CANCELLED');
         onTick(this.taps);
         const last = this.triggers[this.triggers.length - 1] ?? 0;
         if (this.taps >= LAG_TAPS && ctx.currentTime > last + 0.7) break;
@@ -64,13 +60,10 @@ export class LagTest {
           if (this.taps >= MIN_TAPS) break;
           throw new Error('TIMED OUT');
         }
-        await new Promise((r) => setTimeout(r, 50));
+        await poll(() => this.cancelled);
       }
       return analyseLag(rec.finish(), this.triggers);
-    } finally {
-      rec?.dispose();
-      stream.getTracks().forEach((t) => t.stop());
-    }
+    });
   }
 }
 

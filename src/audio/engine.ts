@@ -1,6 +1,5 @@
+import type { Voice } from '../core/pattern';
 import { epiano, type PianoVoice } from './epiano';
-
-export type Voice = 'kick' | 'snare' | 'hat' | 'openhat';
 
 /**
  * Owns the AudioContext: synthesised drum voices, metronome clicks, and the

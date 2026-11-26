@@ -1,0 +1,368 @@
+/* The TRAINER view: settings panel, source, transport, step grid, bar squares, piano roll. */
+
+/* ---------- settings panel (behind the cog) ---------- */
+
+.settings .btnrow {
+  gap: 6px 14px;
+}
+
+.binds {
+  margin-top: 6px;
+}
+
+.bind {
+  width: 62px;
+  height: 22px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-align: center;
+  cursor: pointer;
+}
+
+.bind:focus {
+  outline: none;
+}
+
+.bind.listen {
+  background: #26401f;
+  animation: blink 0.5s steps(1) infinite;
+}
+
+@keyframes blink {
+  50% {
+    color: transparent;
+  }
+}
+
+.outlat {
+  color: var(--dim);
+  font: bold 11px var(--mono);
+}
+
+.lcdline {
+  margin-top: 6px;
+  padding: 3px 8px;
+  min-height: 2.9em;
+  line-height: 1.35;
+}
+
+/* ---------- loaded pattern / routine ---------- */
+
+.source {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.srckind {
+  color: var(--dim);
+}
+
+.srcname {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 6px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* ---------- settings row and transport ---------- */
+
+.controls,
+.transport {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+}
+
+.toggles {
+  display: flex;
+  gap: 14px;
+}
+
+.btn.play::before,
+.btn.test::before {
+  display: inline-block;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+/* TEST: red = recording. Dim during the pattern/count-in, lit when it's your turn. */
+.btn.test::before {
+  border-radius: 50%;
+  background: #3a1212;
+}
+
+.btn.test.rec-lead::before {
+  background: #8a2a20;
+}
+
+.btn.test.rec-on::before {
+  background: var(--red);
+  box-shadow: 0 0 6px var(--red);
+}
+
+.status {
+  min-width: 190px;
+  padding: 3px 8px;
+}
+
+.status:empty::before {
+  content: '\00a0';
+}
+
+/* ---------- bar squares: length (amber), bar on screen (bright), PLAY's bar (beat pulse) ---------- */
+
+.pages {
+  display: flex;
+  gap: 5px;
+}
+
+.barsq {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  background: #2b2217;
+  border: 1px solid #000;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+}
+
+.barsq.in {
+  background: #7a5414;
+}
+
+.barsq.cur {
+  background: var(--led);
+  box-shadow: 0 0 6px var(--led);
+}
+
+/* dim squares brighten on the beat, the bright one dips */
+.barsq.beat {
+  filter: brightness(1.45);
+}
+
+.barsq.cur.beat {
+  filter: brightness(0.72);
+}
+
+.barsq:disabled {
+  cursor: default;
+}
+
+/* ---------- step grids ---------- */
+
+.gridwrap {
+  margin-bottom: 0;
+  padding: 8px;
+  overflow-x: auto;
+}
+
+.grid {
+  display: grid;
+  gap: 4px;
+  align-items: center;
+}
+
+/* The trainer grid and the piano roll share columns so their steps line up. */
+#grid,
+.roll {
+  grid-template-columns: 64px repeat(16, 38px);
+}
+
+.rowhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-right: 4px;
+}
+
+.cell {
+  position: relative;
+  height: 34px;
+  overflow: hidden;
+  background: linear-gradient(#5a5d63, #45484d);
+  border: 2px solid;
+  border-color: #777b82 #222 #222 #777b82;
+  cursor: pointer;
+}
+
+.cell.alt {
+  background: linear-gradient(#6a6258, #514a42);
+}
+
+.cell.muted {
+  opacity: 0.3;
+}
+
+/* the step's LED */
+.cell::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 50%;
+  width: 14px;
+  height: 5px;
+  margin-left: -7px;
+  background: var(--led-off);
+  border: 1px solid #000;
+}
+
+.cell.on::before {
+  background: var(--led);
+  box-shadow: 0 0 6px var(--led);
+}
+
+/* on-time line */
+.cell::after {
+  content: '';
+  position: absolute;
+  top: 10px;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.cell.miss {
+  box-shadow: inset 0 0 0 2px var(--bad);
+}
+
+/* hit markers */
+.mk {
+  position: absolute;
+  top: 11px;
+  bottom: 2px;
+  z-index: 1;
+  width: 3px;
+  margin-left: -1px;
+}
+
+.mk.good {
+  background: var(--good);
+}
+
+.mk.ok {
+  background: var(--ok);
+}
+
+.mk.bad {
+  background: var(--bad);
+}
+
+.mk.extra {
+  width: 5px;
+  margin-left: -2px;
+  background: transparent;
+  border: 1px solid var(--bad);
+}
+
+/* playhead lights */
+.stepled {
+  justify-self: center;
+  width: 10px;
+  height: 8px;
+  background: #3a1010;
+  border: 1px solid #000;
+}
+
+.stepled.lit {
+  background: var(--red);
+  box-shadow: 0 0 6px var(--red);
+}
+
+/* TEST without a metronome: no visual click either */
+.stepled.off {
+  background: #3a3c40;
+  box-shadow: none;
+}
+
+/* ---------- keyboard part (piano roll) ---------- */
+
+.rollwrap {
+  margin-top: 8px;
+}
+
+.rollbar {
+  margin-bottom: 6px;
+}
+
+.keyslbl {
+  font-size: 11px;
+  color: var(--dim);
+}
+
+.roll {
+  display: grid;
+  grid-auto-rows: 11px;
+  column-gap: 4px;
+  row-gap: 1px;
+  user-select: none;
+}
+
+.roll.muted .rollnote {
+  opacity: 0.35;
+}
+
+.keyhead {
+  grid-column: 1;
+  justify-self: end;
+  width: 56px;
+  padding-right: 4px;
+  background: linear-gradient(90deg, #b9bcc1, #e4e6e9);
+  border: 1px solid #000;
+  color: #222;
+  font: bold 8px var(--ui);
+  line-height: 9px;
+  text-align: right;
+}
+
+.keyhead.black {
+  width: 36px;
+  background: linear-gradient(90deg, #0b0c0e, #2e3034);
+}
+
+.keyhead.flash {
+  background: var(--led);
+}
+
+.rollcell {
+  background: #34373c;
+  cursor: crosshair;
+}
+
+.rollcell.alt {
+  background: #3b3732;
+}
+
+.rollcell.black {
+  background: #2a2c30;
+}
+
+.rollcell.black.alt {
+  background: #302d29;
+}
+
+.rollcell.c {
+  box-shadow: inset 0 -1px 0 var(--hi);
+}
+
+.rollnote {
+  z-index: 1;
+  background: var(--led);
+  border: 1px solid #000;
+  box-shadow: inset 0 1px 0 #ffd27a;
+  cursor: pointer;
+}
+
+.rollnote.drawing {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.roll.locked .rollcell,
+.roll.locked .rollnote {
+  cursor: default;
+}

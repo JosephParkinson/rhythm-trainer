@@ -13,10 +13,34 @@ registerProcessor('rt-rec', Rec);
 const loaded = new WeakSet<BaseAudioContext>();
 
 /** Opens the mic raw: echo cancellation would remove the speaker's test tone from the recording. */
-export function openMic() {
+function openMic() {
   return navigator.mediaDevices.getUserMedia({
     audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
   });
+}
+
+/**
+ * Records the mic while `body` runs, then always releases it. `body` calls
+ * `rec.finish()` to get the recording.
+ */
+export async function withMicRecording<T>(ctx: AudioContext, body: (rec: Recorder) => Promise<T>): Promise<T> {
+  const stream = await openMic();
+  let rec: Recorder | null = null;
+  try {
+    rec = await startRecorder(ctx, stream);
+    return await body(rec);
+  } finally {
+    rec?.dispose();
+    stream.getTracks().forEach((t) => t.stop());
+  }
+}
+
+const POLL_MS = 50;
+
+/** One step of a mic test's wait loop: throws if the test was cancelled, else waits briefly. */
+export async function poll(cancelled: () => boolean) {
+  if (cancelled()) throw new Error('CANCELLED');
+  await new Promise((r) => setTimeout(r, POLL_MS));
 }
 
 export interface Recorder {
@@ -31,7 +55,7 @@ export interface Recorder {
  * (broadband onsets), channel 1 band-passed at 1 kHz (test tones). Each block
  * carries its context frame, so recording positions map to context times.
  */
-export async function startRecorder(ctx: AudioContext, stream: MediaStream): Promise<Recorder> {
+async function startRecorder(ctx: AudioContext, stream: MediaStream): Promise<Recorder> {
   if (!loaded.has(ctx)) {
     const url = URL.createObjectURL(new Blob([WORKLET], { type: 'text/javascript' }));
     await ctx.audioWorklet.addModule(url);

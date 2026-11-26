@@ -1,4 +1,4 @@
-import { STEPS, STEPS_PER_BEAT, TRACKS, type ClickPattern, type Pattern, type PianoNote } from '../settings';
+import { STEPS, STEPS_PER_BEAT, TRACKS, type ClickPattern, type Pattern, type PianoNote } from '../core/pattern';
 import type { Engine } from './engine';
 
 const INTERVAL_MS = 25;

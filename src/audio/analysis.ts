@@ -14,7 +14,7 @@ export interface Recording {
 }
 
 /** s, search range for speaker → mic → recording delay */
-export const MAX_ROUND_TRIP = 0.6;
+const MAX_ROUND_TRIP = 0.6;
 
 /** A recording with envelopes and time ↔ sample helpers. */
 export interface Prepared {

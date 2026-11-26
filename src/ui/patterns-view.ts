@@ -1,5 +1,5 @@
-import type { History } from '../history';
-import type { Library } from '../library';
+import type { History } from '../core/history';
+import type { Library } from '../core/library';
 import { confirmBox, promptText } from './dialog';
 import { el } from './dom';
 import { renderHistory } from './history-view';

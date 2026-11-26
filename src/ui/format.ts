@@ -1,18 +1,8 @@
-import type { TimingStats } from '../scoring';
+import type { RunPlan } from '../core/plan';
+import type { TimingStats } from '../core/scoring';
 
+/** Signed ms, e.g. "+12ms". */
 export const fmtMs = (ms: number) => `${ms >= 0 ? '+' : ''}${Math.round(ms)}ms`;
-
-/** One LCD line of stats, column-aligned. */
-export function formatStats(s: TimingStats) {
-  const bias = Math.round(s.bias);
-  const biasTxt = bias === 0 ? '0ms' : `${Math.abs(bias)}ms ${bias > 0 ? 'LATE' : 'EARLY'}`;
-  return [
-    `HIT ${`${s.hit}/${s.notes}`.padEnd(6)}`,
-    `EXTRA ${String(s.extra).padEnd(3)}`,
-    `AVG ${`${Math.round(s.avg)}ms`.padEnd(6)}`,
-    `BIAS ${biasTxt}`,
-  ].join(' ');
-}
 
 /** Columns shared by the breakdown and history tables. */
 export const STAT_COLUMNS: { label: string; title: string }[] = [
@@ -43,4 +33,12 @@ export function fmtDate(ms: number) {
   const d = new Date(ms);
   const p = (n: number) => String(n).padStart(2, '0');
   return `${p(d.getDate())} ${MONTHS[d.getMonth()]} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+const MAX_NAME = 16;
+
+/** Transport readout for a segment of a run: in a routine, prefixed with the pattern's number and name. */
+export function segmentStatus(plan: RunPlan, seg: number, text: string) {
+  if (!plan.routineId) return text;
+  return `${seg + 1}/${plan.segments.length} ${plan.segments[seg].name.slice(0, MAX_NAME)}  ${text}`;
 }

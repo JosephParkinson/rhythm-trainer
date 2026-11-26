@@ -1,0 +1,241 @@
+/* PRACTICE views, the run breakdown and history: list boxes, data tables, the chart. */
+
+/* ---------- columns and list boxes ---------- */
+
+.cols {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  background: var(--panel);
+  border: 1px solid;
+  border-color: var(--lo) var(--hi) var(--hi) var(--lo);
+}
+
+.col.side {
+  flex: 0 0 220px;
+}
+
+.col.main {
+  flex: 1;
+  min-width: 0;
+}
+
+.list {
+  height: 180px;
+  overflow-y: auto;
+}
+
+.list .row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 6px;
+  cursor: default;
+  user-select: none;
+}
+
+.list .row.sel {
+  background: var(--lcd);
+  color: var(--lcd-bg);
+}
+
+.list .row.empty {
+  color: var(--dim);
+}
+
+.list .detail {
+  opacity: 0.7;
+  white-space: nowrap;
+}
+
+/* routine click track editor */
+.steprows {
+  grid-template-columns: 140px repeat(16, 34px);
+  margin: 6px 0;
+}
+
+.beatnum {
+  text-align: center;
+  color: var(--dim);
+}
+
+/* ---------- data tables ---------- */
+
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+  font: bold 11px var(--mono);
+}
+
+table.data th {
+  padding: 3px 6px;
+  color: var(--dim);
+  font: bold 10px var(--ui);
+  text-align: right;
+  border-bottom: 1px solid var(--hi);
+  cursor: default;
+}
+
+table.data td {
+  padding: 2px 6px;
+  text-align: right;
+  white-space: nowrap;
+  border-bottom: 1px solid #222428;
+}
+
+table.data th:first-child,
+table.data td:first-child {
+  text-align: left;
+}
+
+table.data tr.seg td {
+  color: #e6e6e6;
+}
+
+table.data tr.total td {
+  border-top: 1px solid var(--hi);
+}
+
+table.data tr.sub td {
+  color: var(--dim);
+  white-space: pre;
+}
+
+table.data tr.group td {
+  padding-top: 8px;
+  color: var(--dim);
+  font-family: var(--ui);
+}
+
+/* routine items */
+table.data.items td,
+table.data.items th {
+  text-align: left;
+}
+
+table.data.items tr.sel td {
+  background: #23262a;
+}
+
+table.data .ctl {
+  display: flex;
+  gap: 3px;
+}
+
+/* breakdown: pattern rows are clickable; the one under review is marked */
+table.data tr.pick {
+  cursor: pointer;
+}
+
+table.data tr.pick:hover td {
+  background: #23262a;
+}
+
+table.data tr.cur td {
+  background: #2a2d22;
+}
+
+table.data tr.cur td:first-child {
+  box-shadow: inset 3px 0 0 var(--led);
+}
+
+table.data tr.locked {
+  cursor: default;
+}
+
+.tablescroll {
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+/* ---------- breakdown and history panels ---------- */
+
+.breakdown,
+.historybox {
+  margin-top: 8px;
+}
+
+.breakdown .coltitle {
+  margin-bottom: 6px;
+}
+
+.histhead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+/* ---------- chart ---------- */
+
+.chart {
+  position: relative;
+  margin-bottom: 8px;
+  padding: 6px 8px 2px;
+  background: var(--lcd-bg);
+  border: 2px solid;
+  border-color: var(--lo) var(--hi) var(--hi) var(--lo);
+}
+
+.chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.chartlegend {
+  display: flex;
+  gap: 14px;
+}
+
+.chartlegend span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.swatch {
+  display: inline-block;
+  width: 12px;
+  height: 3px;
+}
+
+.chart .gridline {
+  stroke: #1f3319;
+  stroke-width: 1;
+}
+
+.chart .axis,
+.chart .endlabel {
+  fill: var(--dim);
+  font: bold 10px var(--ui);
+}
+
+.chart .dot {
+  stroke: var(--lcd-bg);
+  stroke-width: 2;
+}
+
+.chart .crosshair {
+  stroke: var(--dim);
+  stroke-width: 1;
+  stroke-dasharray: 2 2;
+}
+
+.charttip {
+  position: absolute;
+  top: 26px;
+  padding: 4px 6px;
+  background: #1b1d20;
+  border: 1px solid var(--hi);
+  font: bold 11px var(--mono);
+  white-space: pre;
+  pointer-events: none;
+}

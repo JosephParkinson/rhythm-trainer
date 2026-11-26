@@ -1,18 +1,18 @@
 import {
-  clampSetting,
   cloneGrid,
-  defaultClick,
   clonePiano,
-  isGrid,
+  defaultClick,
+  isClickPattern,
   isPatternGrid,
-  newId,
   patternSteps,
   sanitizePiano,
   type ClickPattern,
-  type KeyValueStore,
   type Pattern,
   type PianoNote,
-} from './settings';
+} from './pattern';
+import { clampSetting } from './settings';
+import { Listeners, newId, readJson, writeJson, type KeyValueStore } from './storage';
+import { isObj, isStr, objects } from './validate';
 
 export interface Folder {
   id: string;
@@ -50,43 +50,41 @@ interface LibraryData {
 }
 
 const STORE_KEY = 'rhythm-trainer-library';
-
-const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object';
-const isStr = (x: unknown): x is string => typeof x === 'string';
-const list = (x: unknown) => (Array.isArray(x) ? x.filter(isObj) : []);
+const DEFAULT_BPM = 90;
+const DEFAULT_BARS = 4;
 
 /** Builds library data from untrusted stored JSON, dropping anything malformed or dangling. */
 export function sanitizeLibrary(raw: unknown): LibraryData {
   const r = isObj(raw) ? raw : {};
-  const folders = list(r.folders)
+  const folders = objects(r.folders)
     .filter((f) => isStr(f.id) && isStr(f.name))
     .map((f) => ({ id: f.id as string, name: f.name as string }));
   const folderIds = new Set(folders.map((f) => f.id));
 
-  const patterns = list(r.patterns)
+  const patterns = objects(r.patterns)
     .filter((p) => isStr(p.id) && isStr(p.name) && isPatternGrid(p.grid))
     .map((p) => ({
       id: p.id as string,
       name: p.name as string,
       folderId: isStr(p.folderId) && folderIds.has(p.folderId) ? p.folderId : null,
-      bpm: clampSetting('bpm', Number(p.bpm), 90),
+      bpm: clampSetting('bpm', Number(p.bpm), DEFAULT_BPM),
       grid: p.grid as Pattern,
       piano: sanitizePiano(p.piano, patternSteps(p.grid as Pattern)),
     }));
   const patternIds = new Set(patterns.map((p) => p.id));
 
-  const routines = list(r.routines)
+  const routines = objects(r.routines)
     .filter((x) => isStr(x.id) && isStr(x.name))
     .map((x) => ({
       id: x.id as string,
       name: x.name as string,
-      items: list(x.items)
+      items: objects(x.items)
         .filter((i) => isStr(i.patternId) && patternIds.has(i.patternId))
         .map((i) => ({
           patternId: i.patternId as string,
-          bars: clampSetting('bars', Number(i.bars), 4),
-          bpm: clampSetting('bpm', Number(i.bpm), 90),
-          click: isGrid(i.click, 2) ? i.click : defaultClick(),
+          bars: clampSetting('bars', Number(i.bars), DEFAULT_BARS),
+          bpm: clampSetting('bpm', Number(i.bpm), DEFAULT_BPM),
+          click: isClickPattern(i.click) ? i.click : defaultClick(),
         })),
     }));
 
@@ -99,16 +97,10 @@ export function sanitizeLibrary(raw: unknown): LibraryData {
  */
 export class Library {
   private data: LibraryData;
-  private readonly listeners = new Set<() => void>();
+  private readonly listeners = new Listeners();
 
-  constructor(private readonly store: KeyValueStore | null) {
-    let raw: unknown = null;
-    try {
-      raw = JSON.parse(store?.getItem(STORE_KEY) ?? 'null');
-    } catch {
-      /* corrupt: start empty */
-    }
-    this.data = sanitizeLibrary(raw);
+  constructor(private readonly store: KeyValueStore) {
+    this.data = sanitizeLibrary(readJson(store, STORE_KEY));
   }
 
   get folders(): readonly Folder[] {
@@ -161,7 +153,7 @@ export class Library {
 
   // ---------- patterns ----------
 
-  /** Creates, or overwrites when `id` is given. Stores a copy of the grid. */
+  /** Creates, or overwrites when `id` is given. Stores copies of the grid and keyboard part. */
   savePattern(p: Omit<SavedPattern, 'id' | 'piano'> & { id?: string; piano?: PianoNote[] }): SavedPattern {
     const existing = this.pattern(p.id ?? null);
     const saved: SavedPattern = { ...p, id: existing?.id ?? newId(), grid: cloneGrid(p.grid), piano: clonePiano(p.piano ?? []) };
@@ -207,7 +199,7 @@ export class Library {
   addItem(routineId: string, patternId: string) {
     const p = this.pattern(patternId);
     if (!p) return;
-    this.edit(this.routine(routineId), (r) => r.items.push({ patternId, bars: 4, bpm: p.bpm, click: defaultClick() }));
+    this.edit(this.routine(routineId), (r) => r.items.push({ patternId, bars: DEFAULT_BARS, bpm: p.bpm, click: defaultClick() }));
   }
 
   updateItem(routineId: string, index: number, changes: Partial<RoutineItem>) {
@@ -237,11 +229,7 @@ export class Library {
   }
 
   private commit() {
-    try {
-      this.store?.setItem(STORE_KEY, JSON.stringify(this.data));
-    } catch {
-      /* quota or unavailable: keep in memory */
-    }
-    this.listeners.forEach((fn) => fn());
+    writeJson(this.store, STORE_KEY, this.data);
+    this.listeners.notify();
   }
 }

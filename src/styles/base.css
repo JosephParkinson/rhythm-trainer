@@ -1,0 +1,377 @@
+/*
+ * Retro drum-machine look shared by every view: tokens, the rack, panels,
+ * buttons, LED lights and toggles, LCD readouts and inputs, and dialogs.
+ * See "UI style" in CLAUDE.md.
+ */
+
+:root {
+  --bg: #1c1d20;
+  --panel: #2b2d31;
+  --hi: #5b5f66;
+  --lo: #121316;
+  --text: #c9ccd1;
+  --dim: #8a8f97;
+  --led: #ffb02e;
+  --led-off: #4a3818;
+  --lcd-bg: #0c180a;
+  --lcd: #8cff6a;
+  --good: #5cff5c;
+  --ok: #ffd84a;
+  --bad: #ff4f3a;
+  --red: #ff3b2e;
+  --ui: Tahoma, Verdana, Geneva, sans-serif;
+  --mono: 'Courier New', Courier, monospace;
+  --heavy: 'Arial Black', Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  padding: 24px 16px;
+  background: var(--bg);
+  color: var(--text);
+  font: bold 11px var(--ui);
+}
+
+/* ---------- rack and panels ---------- */
+
+/* fixed width so switching views doesn't make the rack jump */
+.rack {
+  width: 820px;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 12px 14px 14px;
+  background: linear-gradient(#42454b, #2c2e32);
+  border: 2px solid;
+  border-color: var(--hi) var(--lo) var(--lo) var(--hi);
+  box-shadow: 0 0 0 1px #000, 0 6px 18px rgba(0, 0, 0, 0.6);
+}
+
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 10px;
+}
+
+.topright {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand {
+  margin-right: 6px;
+  font: italic 900 20px var(--heavy);
+  letter-spacing: 1px;
+  color: #e8e8e8;
+  text-shadow: 1px 1px 0 #000;
+}
+
+.brand span {
+  color: var(--led);
+}
+
+.panel {
+  margin-bottom: 8px;
+  padding: 6px 8px;
+  background: var(--panel);
+  border: 1px solid;
+  border-color: var(--lo) var(--hi) var(--hi) var(--lo);
+}
+
+.btnrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+}
+
+/* in a flex row: push this item (and what follows) to the right */
+.push {
+  margin-left: auto;
+}
+
+.coltitle {
+  color: var(--dim);
+  letter-spacing: 1px;
+}
+
+.empty {
+  padding: 8px 0;
+  color: var(--dim);
+}
+
+label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--dim);
+}
+
+/* ---------- tabs ---------- */
+
+.tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.tabs.sub {
+  margin-bottom: 6px;
+}
+
+.btn.tab.lit {
+  color: var(--led);
+}
+
+/* ---------- buttons ---------- */
+
+.btn {
+  padding: 5px 14px;
+  background: linear-gradient(#5e6269, #3b3e43);
+  color: var(--text);
+  border: 2px solid;
+  border-color: #7a7f87 var(--lo) var(--lo) #7a7f87;
+  font: bold 11px var(--ui);
+  cursor: pointer;
+}
+
+.btn:active,
+.btn.lit {
+  background: linear-gradient(#36393d, #4a4d53);
+  border-color: var(--lo) #7a7f87 #7a7f87 var(--lo);
+}
+
+.btn:disabled {
+  color: #666;
+  cursor: default;
+}
+
+.btn.small {
+  padding: 3px 8px;
+}
+
+.btn.tiny {
+  margin-right: 6px;
+  padding: 0 5px;
+  font-size: 9px;
+  line-height: 14px;
+}
+
+.btn.tiny.lit {
+  color: var(--good);
+}
+
+.btn.icon {
+  display: flex;
+  align-items: center;
+  padding: 3px 6px;
+}
+
+.btn.icon svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
+.btn.icon.lit {
+  color: var(--led);
+}
+
+/* ---------- LED lights ---------- */
+
+/* A small square light before the text: dark green off, bright green on. */
+.midiled::before,
+.toggle::before,
+.btn.play::before,
+.btn.test::before {
+  content: '';
+  flex: none;
+  width: 7px;
+  height: 7px;
+  background: #1f4a1f;
+  border: 1px solid #000;
+}
+
+.midiled.on::before,
+.toggle.on::before,
+.btn.play.lit::before {
+  background: var(--good);
+  box-shadow: 0 0 5px var(--good);
+}
+
+.midiled {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--dim);
+  cursor: pointer;
+}
+
+/* On/off settings: never browser checkboxes. */
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 0;
+  background: none;
+  border: 0;
+  color: var(--dim);
+  font: bold 11px var(--ui);
+  cursor: pointer;
+}
+
+.toggle.on {
+  color: var(--text);
+}
+
+.toggle:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.toggle svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Track labels: the light is the mute switch (green = on, dark = muted, amber flash = hit). */
+.lbl {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: #ddd;
+  font: 900 13px var(--heavy);
+  cursor: pointer;
+}
+
+.lbl::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  background: #3fae3f;
+  border: 1px solid #000;
+  box-shadow: 0 0 3px rgba(92, 255, 92, 0.5);
+}
+
+.lbl.muted {
+  color: var(--dim);
+}
+
+.lbl.muted::before {
+  background: #1f2a1f;
+  box-shadow: none;
+}
+
+.lbl.flash::before {
+  background: var(--led);
+  box-shadow: 0 0 6px var(--led);
+}
+
+.lbl:disabled {
+  cursor: default;
+}
+
+/* ---------- LCD readouts and inputs ---------- */
+
+input[type='number'],
+input.text,
+.dropdown,
+.bind,
+.srcname,
+.status,
+.lcdline,
+.list {
+  background: var(--lcd-bg);
+  color: var(--lcd);
+  border: 2px solid;
+  border-color: var(--lo) var(--hi) var(--hi) var(--lo);
+  font: bold 12px var(--mono);
+}
+
+input[type='number'] {
+  width: 50px;
+  padding: 2px 3px;
+}
+
+input.text,
+.dropdown {
+  padding: 1px 3px;
+}
+
+.dropdown {
+  max-width: 220px;
+}
+
+input:disabled,
+select:disabled,
+.bind:disabled {
+  opacity: 0.5;
+}
+
+/* glowing LCD text */
+.status,
+.lcdline {
+  white-space: pre;
+  text-shadow: 0 0 4px rgba(140, 255, 106, 0.55);
+}
+
+/* ---------- dialogs ---------- */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.window {
+  min-width: 300px;
+  background: linear-gradient(#42454b, #2c2e32);
+  border: 2px solid;
+  border-color: var(--hi) var(--lo) var(--lo) var(--hi);
+  box-shadow: 0 0 0 1px #000, 0 6px 18px rgba(0, 0, 0, 0.6);
+}
+
+.titlebar {
+  padding: 4px 8px;
+  background: linear-gradient(90deg, #5a4210, #2c2e32);
+  color: var(--led);
+  letter-spacing: 1px;
+}
+
+.winbody {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+}
+
+.winbody .msg {
+  max-width: 320px;
+  line-height: 1.4;
+}
+
+.winbody input.text {
+  width: 100%;
+}
+
+.winbtns {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}

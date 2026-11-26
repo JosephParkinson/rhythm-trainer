@@ -1,4 +1,4 @@
-import { STEPS, STEPS_PER_BEAT } from '../settings';
+import { STEPS, STEPS_PER_BEAT } from '../core/pattern';
 import { el } from './dom';
 
 export function button(parent: HTMLElement, label: string, onClick: () => void, cls = 'btn small') {
@@ -8,13 +8,19 @@ export function button(parent: HTMLElement, label: string, onClick: () => void, 
   return b;
 }
 
+/** A track-style label whose light is a mute switch (green = on, dark = muted). */
+export function setMuteLight(label: HTMLElement, muted: boolean) {
+  label.classList.toggle('muted', muted);
+  label.title = muted ? 'Muted. Click to unmute' : 'Click to mute';
+}
+
 export function heading(parent: HTMLElement, text: string) {
   const h = el('div', 'coltitle', parent);
   h.textContent = text;
   return h;
 }
 
-export interface ListItem {
+interface ListItem {
   id: string;
   label: string;
   detail?: string;
@@ -77,9 +83,11 @@ export function select(parent: HTMLElement, options: Option[], value: string, on
   return sel;
 }
 
-/** Labelled rows of step cells, styled like the main grid (used for click tracks). */
+const SUBDIVISIONS = ['', 'e', '&', 'a'];
+
+/** Labelled rows of step cells with beat numbers, styled like the main grid (used for click tracks). */
 export function stepRows(parent: HTMLElement, labels: string[], rows: boolean[][], onToggle: (r: number, s: number) => void) {
-  const grid = el('div', 'grid', parent);
+  const grid = el('div', 'grid steprows', parent);
   labels.forEach((label, r) => {
     el('span', 'lbl', el('div', 'rowhead', grid)).textContent = label;
     for (let s = 0; s < STEPS; s++) {
@@ -90,7 +98,8 @@ export function stepRows(parent: HTMLElement, labels: string[], rows: boolean[][
   });
   el('div', '', grid);
   for (let s = 0; s < STEPS; s++) {
-    el('div', 'beatnum', grid).textContent = s % STEPS_PER_BEAT ? ['', 'e', '&', 'a'][s % STEPS_PER_BEAT] : String(s / STEPS_PER_BEAT + 1);
+    const sub = s % STEPS_PER_BEAT;
+    el('div', 'beatnum', grid).textContent = sub ? SUBDIVISIONS[sub] : String(s / STEPS_PER_BEAT + 1);
   }
   return grid;
 }

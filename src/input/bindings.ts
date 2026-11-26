@@ -1,10 +1,20 @@
-import { TRACKS, type Settings } from '../settings';
+import { TRACKS } from '../core/pattern';
+import type { Settings } from '../core/settings';
 import { initMidi, type NoteEvent } from './midi';
 import { routeNote } from './routing';
 
-export type HitHandler = (track: number, perfMs: number, vel: number) => void;
-/** A MIDI note for the keyboard instrument (on or off). */
-export type PianoHandler = (e: NoteEvent) => void;
+export interface BindingEvents {
+  /** a drum was hit; `perfMs` is the event's performance.now() timestamp, `vel` 0–1 */
+  hit(track: number, perfMs: number, vel: number): void;
+  /** a MIDI note for the keyboard instrument (on or off) */
+  piano(e: NoteEvent): void;
+  /** bindings or learn state changed */
+  change(): void;
+  /** space bar, when it isn't bound to a drum */
+  space(): void;
+  /** ← / → */
+  arrow(delta: number): void;
+}
 
 /**
  * Routes computer keys and MIDI notes to drum tracks, and other MIDI notes to
@@ -17,14 +27,7 @@ export class Bindings {
 
   constructor(
     private readonly settings: Settings,
-    private readonly onHit: HitHandler,
-    /** bindings or learn state changed */
-    private readonly onChange: () => void,
-    private readonly onPiano: PianoHandler,
-    /** space bar, when it isn't bound to a drum: play/pause */
-    private readonly onSpace: () => void,
-    /** ← / → : step through review bars */
-    private readonly onNav: (delta: number) => void,
+    private readonly ev: BindingEvents,
   ) {
     window.addEventListener('keydown', (e) => this.onKey(e));
     // Clicking anywhere except a binding button cancels learn.
@@ -41,7 +44,7 @@ export class Bindings {
   learn(track: number | null) {
     if (track === this.learning) return;
     this.learning = track;
-    this.onChange();
+    this.ev.change();
   }
 
   labels(): string[] {
@@ -68,16 +71,16 @@ export class Bindings {
     if (tgt instanceof HTMLSelectElement || (tgt instanceof Element && tgt.closest('.overlay'))) return;
     if (key === ' ' && !this.settings.keys.includes(' ')) {
       e.preventDefault();
-      return this.onSpace();
+      return this.ev.space();
     }
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
       e.preventDefault();
-      return this.onNav(e.key === 'ArrowLeft' ? -1 : 1);
+      return this.ev.arrow(e.key === 'ArrowLeft' ? -1 : 1);
     }
     const track = this.settings.keys.indexOf(key);
     if (track < 0) return;
     e.preventDefault();
-    this.onHit(track, e.timeStamp, 1);
+    this.ev.hit(track, e.timeStamp, 1);
   }
 
   private onNote(e: NoteEvent) {
@@ -87,8 +90,8 @@ export class Bindings {
     }
     const route = routeNote(this.settings, e.note, e.channel);
     if (route.to === 'drum') {
-      if (e.on) this.onHit(route.track, e.timeStamp, e.vel);
-    } else if (route.to === 'piano') this.onPiano(e);
+      if (e.on) this.ev.hit(route.track, e.timeStamp, e.vel);
+    } else if (route.to === 'piano') this.ev.piano(e);
   }
 
   private assignKey(track: number, key: string) {
@@ -111,7 +114,7 @@ export class Bindings {
 
   private learnDone() {
     this.learning = null;
-    this.onChange();
+    this.ev.change();
   }
 }
 

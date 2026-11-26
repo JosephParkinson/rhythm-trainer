@@ -1,6 +1,8 @@
-import type { RunResult } from './plan';
-import { collect, summarize, type Sample, type TimingStats } from './scoring';
-import { STEPS_PER_BEAT, TRACKS, hasClick, newId, type KeyValueStore } from './settings';
+import { STEPS_PER_BEAT, TRACKS } from './pattern';
+import { usesMetronome, type RunResult } from './plan';
+import { collect, summarize, timing, type Sample, type TimingStats } from './scoring';
+import { Listeners, newId, readJson, writeJson, type KeyValueStore } from './storage';
+import { isObj } from './validate';
 
 export interface SegmentRecord {
   patternId: string | null;
@@ -12,6 +14,7 @@ export interface SegmentRecord {
   tracks: TimingStats[];
 }
 
+/** A run's figures: what the breakdown shows and history keeps (never raw hits). */
 export interface RunSummary {
   total: TimingStats;
   /** per track, across all segments */
@@ -20,8 +23,8 @@ export interface RunSummary {
   subs: TimingStats[];
   segments: SegmentRecord[];
   /**
-   * Played with a metronome (any segment had a click). Runs without one are
-   * harder, so history keeps them apart. Missing on old records = true.
+   * Played with a metronome. Runs without one are harder, so history keeps
+   * them apart. Missing on records from before the flag existed.
    */
   metronome?: boolean;
 }
@@ -45,13 +48,13 @@ const MAX_RECORDS = 2000;
 
 /** `muted` tracks are left out of every figure. */
 export function summariseRun(r: RunResult, muted: readonly boolean[] = []): RunSummary {
-  const per = (f: (seg: number) => Sample) => summarize(r.takes.map((_, i) => f(i)));
+  const across = (f: (seg: number) => Sample) => summarize(r.takes.map((_, i) => f(i)));
   const pattern = (i: number) => r.plan.segments[i].pattern;
   return {
-    metronome: r.plan.segments.some((s) => hasClick(s.click)),
-    total: per((i) => collect(r.takes[i], pattern(i), { muted })),
-    tracks: TRACKS.map((_, track) => per((i) => collect(r.takes[i], pattern(i), { track, muted }))),
-    subs: Array.from({ length: STEPS_PER_BEAT }, (_, sub) => per((i) => collect(r.takes[i], pattern(i), { sub, muted }))),
+    metronome: usesMetronome(r.plan),
+    total: across((i) => collect(r.takes[i], pattern(i), { muted })),
+    tracks: TRACKS.map((_, track) => across((i) => collect(r.takes[i], pattern(i), { track, muted }))),
+    subs: Array.from({ length: STEPS_PER_BEAT }, (_, sub) => across((i) => collect(r.takes[i], pattern(i), { sub, muted }))),
     segments: r.takes.map((take, i) => {
       const spec = r.plan.segments[i];
       return {
@@ -59,31 +62,24 @@ export function summariseRun(r: RunResult, muted: readonly boolean[] = []): RunS
         name: spec.name,
         bpm: spec.bpm,
         bars: spec.bars,
-        total: summarize([collect(take, spec.pattern, { muted })]),
-        tracks: TRACKS.map((_, track) => summarize([collect(take, spec.pattern, { track, muted })])),
+        total: timing(take, spec.pattern, { muted }),
+        tracks: TRACKS.map((_, track) => timing(take, spec.pattern, { track, muted })),
       };
     }),
   };
 }
 
+const isRecord = (x: unknown): x is RunRecord =>
+  isObj(x) && typeof x.id === 'string' && typeof x.refId === 'string' && typeof x.date === 'number' && isObj(x.total);
+
 /** Completed runs of saved patterns and routines, for progress tracking. */
 export class History {
   private records: RunRecord[];
-  private readonly listeners = new Set<() => void>();
+  private readonly listeners = new Listeners();
 
-  constructor(private readonly store: KeyValueStore | null) {
-    let raw: unknown = null;
-    try {
-      raw = JSON.parse(store?.getItem(STORE_KEY) ?? 'null');
-    } catch {
-      /* corrupt: start empty */
-    }
-    this.records = Array.isArray(raw)
-      ? raw.filter(
-          (x): x is RunRecord =>
-            !!x && typeof x.id === 'string' && typeof x.refId === 'string' && typeof x.date === 'number' && !!x.total,
-        )
-      : [];
+  constructor(private readonly store: KeyValueStore) {
+    const raw = readJson(store, STORE_KEY);
+    this.records = Array.isArray(raw) ? raw.filter(isRecord) : [];
   }
 
   onChange(fn: () => void) {
@@ -109,11 +105,7 @@ export class History {
   }
 
   private commit() {
-    try {
-      this.store?.setItem(STORE_KEY, JSON.stringify(this.records));
-    } catch {
-      /* quota or unavailable: keep in memory */
-    }
-    this.listeners.forEach((fn) => fn());
+    writeJson(this.store, STORE_KEY, this.records);
+    this.listeners.notify();
   }
 }

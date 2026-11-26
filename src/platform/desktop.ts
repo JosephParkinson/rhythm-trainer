@@ -1,4 +1,4 @@
-import { confirmBox } from './ui/dialog';
+import { confirmBox } from '../ui/dialog';
 
 /** Exposed by electron/preload.cjs in the desktop app; absent on the web. */
 interface DesktopApi {

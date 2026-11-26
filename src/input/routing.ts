@@ -1,4 +1,4 @@
-import { GM_DRUM_CHANNEL, type Settings } from '../settings';
+import { GM_DRUM_CHANNEL, type Settings } from '../core/settings';
 
 export type Route = { to: 'drum'; track: number } | { to: 'piano' } | { to: 'ignore' };
 

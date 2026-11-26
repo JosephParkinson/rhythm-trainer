@@ -1,7 +1,7 @@
 import { Scheduler, playClickStep, playPianoStep } from '../audio/scheduler';
-import { barRefs, type RunResult } from '../plan';
-import type { Hit } from '../scoring';
-import { STEPS, TRACKS, patternSteps } from '../settings';
+import { STEPS, TRACKS, patternSteps } from '../core/pattern';
+import { barRefs, type RunResult } from '../core/plan';
+import type { Hit } from '../core/scoring';
 import type { Deps, Session } from './session';
 
 const LEAD_IN = 0.3;

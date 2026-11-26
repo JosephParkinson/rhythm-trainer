@@ -1,11 +1,12 @@
 import { Scheduler, playClickStep, playCountInStep, playPatternStep, playPianoStep } from '../audio/scheduler';
-import { leadIn, stepDurFor, type RunPlan, type RunResult, type SegmentSpec } from '../plan';
-import { Take } from '../scoring';
-import { BEATS_PER_BAR, STEPS, STEPS_PER_BEAT, hasClick, patternSteps } from '../settings';
+import { BEATS_PER_BAR, STEPS, STEPS_PER_BEAT, hasClick, patternSteps, stepDurFor } from '../core/pattern';
+import { leadIn, type RunPlan, type RunResult, type SegmentSpec } from '../core/plan';
+import { Take } from '../core/scoring';
+import { segmentStatus } from '../ui/format';
 import type { Deps, Session } from './session';
 
+/** s before the first step, so scheduling never starts late */
 const LEAD_IN = 0.25;
-const MAX_NAME = 16;
 
 interface Segment {
   spec: SegmentSpec;
@@ -106,7 +107,7 @@ export class RunSession implements Session {
     const noClick = !hasClick(seg.spec.click);
     grid.setStepLedsOff(noClick);
     grid.setPlayhead(noClick ? -1 : playhead);
-    controls.status(this.plan.routineId ? `${i + 1}/${this.segs.length} ${seg.spec.name.slice(0, MAX_NAME)}  ${text}` : text);
+    controls.status(segmentStatus(this.plan, i, text));
   }
 
   hit(track: number, perfMs: number, vel: number) {

@@ -10,9 +10,6 @@ export interface NoteEvent {
   timeStamp: number;
 }
 
-/** Note-on/off from any connected MIDI input. */
-export type NoteHandler = (e: NoteEvent) => void;
-
 /** The access currently listened to; replaced (and detached) on rescan so notes never arrive twice. */
 let current: MIDIAccess | null = null;
 
@@ -25,7 +22,7 @@ function detach(access: MIDIAccess) {
  * Listens to every MIDI input, including ones plugged in later. Calling it
  * again rescans from scratch. Resolves false if MIDI is unavailable or refused.
  */
-export async function initMidi(onNote: NoteHandler, onDevices: (names: string[]) => void): Promise<boolean> {
+export async function initMidi(onNote: (e: NoteEvent) => void, onDevices: (names: string[]) => void): Promise<boolean> {
   if (!navigator.requestMIDIAccess) return false;
   let access: MIDIAccess;
   try {

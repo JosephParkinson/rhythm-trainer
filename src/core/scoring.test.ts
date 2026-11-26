@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { Take, collect, scoreCell, summarize, timing } from './scoring';
-import { STEPS, emptyPattern } from './settings';
+import { STEPS, emptyPattern } from './pattern';
 
 const STEP = 0.1; // s per 16th
 

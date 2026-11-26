@@ -1,9 +1,10 @@
 import type { Engine } from '../audio/engine';
-import type { Settings } from '../settings';
+import type { Settings } from '../core/settings';
 import type { ActiveMode, Controls } from '../ui/controls';
 import type { Grid } from '../ui/grid';
 import type { PianoRoll } from '../ui/piano-roll';
 
+/** What a session may use. */
 export interface Deps {
   eng: Engine;
   settings: Settings;
@@ -15,9 +16,10 @@ export interface Deps {
 }
 
 /**
- * Something the transport is doing: playing a take, replaying, previewing or
- * calibrating. The App runs one at a time, calls frame() every animation
- * frame, forwards hits, and calls stop() exactly once when it ends.
+ * One transport activity: TEST, PLAY, a replay or a mic test. The App runs one
+ * at a time, calls frame() every animation frame, forwards hits, and calls
+ * stop() exactly once when it ends: completed (the session called finish) or
+ * cancelled (the user pressed its button again).
  */
 export interface Session {
   readonly mode: ActiveMode;
@@ -26,11 +28,5 @@ export interface Session {
   frame?(): void;
   hit?(track: number, perfMs: number, vel: number): void;
   /** Release timers and cancel scheduled audio. */
-  stop(): void;
-}
-
-/** LCD text for a failed mic test. */
-export function errorText(e: unknown) {
-  if (e instanceof DOMException && e.name === 'NotAllowedError') return 'MIC ACCESS DENIED';
-  return e instanceof Error ? e.message.toUpperCase() : 'ERROR';
+  stop(completed: boolean): void;
 }

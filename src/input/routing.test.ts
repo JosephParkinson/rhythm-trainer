@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { defaultSettings } from '../settings';
+import { defaultSettings } from '../core/settings';
 import { routeNote } from './routing';
 
 const PADS = 9; // channel 10

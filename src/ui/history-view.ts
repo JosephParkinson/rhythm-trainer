@@ -1,4 +1,4 @@
-import { withMetronome, type RunRecord } from '../history';
+import { withMetronome, type RunRecord } from '../core/history';
 import { lineChart } from './chart';
 import { el } from './dom';
 import { STAT_COLUMNS, fmtDate, statCells } from './format';
