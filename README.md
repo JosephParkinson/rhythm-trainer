@@ -1,7 +1,7 @@
 # RT-01
 
 A rhythm trainer, taught via finger drumming. 
-Program a pattern of 1–4 bars and test yourself against it on your computer keyboard or a MIDI pad controller. See every hit scored against the grid in milliseconds. Save patterns into folders, chain them into routines, and track improvements over time.
+Program a pattern of 1–4 bars and test yourself against it on your computer keyboard or a MIDI pad controller. Measure your timing accuracy in milliseconds against the grid. Save patterns into folders, chain them into routines, and track improvements over time.
 
 - Allows freedom to practice any pattern you like:
      - drills to practice simple quarter, 8th or 16th notes. Useful for any instrument
